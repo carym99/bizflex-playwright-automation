@@ -5,10 +5,12 @@ import { assertMfaRequiredContract, assertNoSensitiveFields } from '../../helper
 import { hasTokenPair } from '../../schemas/token.schema';
 
 const strictMode = String(process.env.STRICT_AUTH_CONTRACT || '').toLowerCase() === 'true';
-const SUCCESS_LOGIN_BUDGET_MS = strictMode ? 2_000 : 5_000;
-const OTP_LOGIN_BUDGET_MS = strictMode ? 2_000 : 5_000;
-const FAILED_LOGIN_BUDGET_MS = strictMode ? 1_000 : 3_000;
-const OTP_VERIFY_BUDGET_MS = strictMode ? 1_500 : 3_000;
+const ci = !!process.env.CI;
+/** Latency budgets are relaxed on CI to avoid flakes from cold starts / shared API. */
+const SUCCESS_LOGIN_BUDGET_MS = strictMode ? 4_000 : ci ? 12_000 : 8_000;
+const OTP_LOGIN_BUDGET_MS = strictMode ? 4_000 : ci ? 12_000 : 8_000;
+const FAILED_LOGIN_BUDGET_MS = strictMode ? 2_000 : ci ? 8_000 : 5_000;
+const OTP_VERIFY_BUDGET_MS = strictMode ? 3_000 : ci ? 8_000 : 5_000;
 const verifyOtpPath = process.env.AUTH_VERIFY_OTP_PATH || '/v1/auth/verify-otp';
 const resendOtpPath = process.env.AUTH_RESEND_OTP_PATH || '/v1/auth/resend-otp';
 

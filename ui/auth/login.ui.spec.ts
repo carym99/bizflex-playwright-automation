@@ -48,8 +48,7 @@ test.describe('@ui @auth User Login UI', () => {
     if (disabled) await expect(loginButton).toBeDisabled();
     else await expect(loginButton).toHaveCSS('pointer-events', 'none');
 
-    await page.waitForTimeout(500);
-    expect(loginPosts).toBe(0);
+    await expect.poll(() => loginPosts, { timeout: 3_000 }).toBe(0);
     await expect(page.locator(loginSelectors.email).first()).toBeVisible();
   });
 

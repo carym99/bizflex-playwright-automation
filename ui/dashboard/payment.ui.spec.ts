@@ -1,11 +1,8 @@
 import { test, expect } from '@playwright/test';
-import * as path from 'path';
 import paymentData from '../../fixtures/paymentData.json';
 import { PaymentPage, type CardDetails } from '../../pages/PaymentPage';
 import { ensureBizflexCardModalClosed } from '../../utils/modal';
 import { paymentSelectors } from '../../utils/selectors';
-
-test.use({ storageState: path.join(__dirname, '..', '..', 'storage', 'auth.json') });
 
 test.describe('@ui @wallet Payment', () => {
   test('account shows balance or payment context', async ({ page }) => {

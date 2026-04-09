@@ -60,6 +60,36 @@ export function extractTokenFromLoginBody(body: unknown): string | null {
   return null;
 }
 
+export function extractRefreshTokenFromLoginBody(body: unknown): string | null {
+  const tryRead = (obj: unknown): string | null => {
+    if (!obj || typeof obj !== 'object') return null;
+    const r = (obj as Record<string, unknown>).refreshToken;
+    return typeof r === 'string' && r.length > 0 ? r : null;
+  };
+
+  let t = tryRead(body);
+  if (t) return t;
+
+  const unwrapped = unwrapData(body);
+  t = tryRead(unwrapped);
+  if (t) return t;
+
+  if (unwrapped && typeof unwrapped === 'object' && 'data' in unwrapped) {
+    const inner = (unwrapped as { data?: unknown }).data;
+    t = tryRead(inner);
+    if (t) return t;
+  }
+
+  const b = body as ApiLoginBody;
+  const inner = b.data;
+  if (inner && typeof inner === 'object') {
+    t = tryRead(inner);
+    if (t) return t;
+  }
+
+  return null;
+}
+
 export function extractUserFromLoginBody(body: unknown): unknown | null {
   const raw = unwrapData(body);
   if (!raw) {

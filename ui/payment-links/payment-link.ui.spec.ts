@@ -1,10 +1,7 @@
 import { test, expect } from '@playwright/test';
-import * as path from 'path';
 import paymentData from '../../fixtures/paymentData.json';
 import { LoginPage } from '../../pages/LoginPage';
 import { PaymentLinkPage } from '../../pages/PaymentLinkPage';
-
-test.use({ storageState: path.join(__dirname, '..', '..', 'storage', 'auth.json') });
 
 test.describe('@ui @payment-link Payment Link', () => {
   test('localStorage carries auth tokens after navigation', async ({ page }) => {
