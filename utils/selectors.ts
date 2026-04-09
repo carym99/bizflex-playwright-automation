@@ -29,6 +29,10 @@ export const paymentLinkSelectors = {
   generatedLink: '[data-testid="generated-payment-link"], [data-testid="payment-link-url"]',
   viewLinks: '[data-testid="view-payment-links-button"], [data-testid="view-links-button"]',
   totalLinks: '[data-testid="total-links-created"], [data-testid="total-links-card"]',
+  /** List / table / grid that shows created payment links */
+  linkListRegion:
+    '[data-testid="payment-links-list"], [data-testid="payment-links-table"], [data-testid="payment-link-list"], [role="grid"], table',
+  linkRow: '[data-testid="payment-link-row"], tbody tr, [role="row"]',
 };
 
 export const paymentSelectors = {
