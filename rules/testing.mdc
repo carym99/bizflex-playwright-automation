@@ -1,0 +1,281 @@
+# Testing Standards (Playwright + Cucumber)
+
+## Architecture Decision
+
+- Playwright Test is the primary framework for API, session injection, contract, token, and integration coverage.
+- Cucumber BDD is used only for a small set of business-readable end-to-end journeys.
+- Do not convert the entire framework to Cucumber.
+- Required coverage split:
+  - ~70% API + session injection + contract validation
+  - ~20% UI verification of authenticated state and key widgets
+  - ~10% system-wide end-to-end journeys in Cucumber
+- Refactor in place only: reuse existing helpers/selectors/page objects/auth utilities/specs and avoid duplicate suites.
+
+## Framework Structure
+
+```text
+playwright/
+  api/
+    auth/
+    payments/
+    wallet/
+    cards/
+    payment-links/
+  ui/
+    auth/
+    dashboard/
+    payment-links/
+    transactions/
+  e2e/
+    features/
+    step-definitions/
+    support/
+  helpers/
+  fixtures/
+  schemas/
+```
+
+- `api/` and `ui/` remain Playwright Test.
+- `e2e/features` and `e2e/step-definitions` use Cucumber for true cross-system business flows only.
+- Step definitions stay thin; business logic lives in page objects/helpers.
+
+## Authentication Strategy
+
+- Keep auth pyramid at 70/20/10.
+- Default path for non-E2E:
+  - authenticate via API
+  - inject token/session into browser context
+  - reuse authenticated state across UI tests
+- Only true E2E scenarios should use full login UI.
+
+## Required Environment Variables
+
+- `BASE_URL`
+- `API_URL`
+- `AUTH_API_LOGIN_PATH`
+- `TEST_EMAIL`
+- `TEST_PASSWORD`
+- `LOCKED_USER_EMAIL`
+- `LOCKED_USER_PASSWORD`
+- `SUSPENDED_USER_EMAIL`
+- `SUSPENDED_USER_PASSWORD`
+- `DELETED_USER_EMAIL` (if backend supports deleted-account auth behavior)
+- `DELETED_USER_PASSWORD` (if backend supports deleted-account auth behavior)
+- `UNVERIFIED_USER_EMAIL` (if backend supports unverified-account auth behavior)
+- `UNVERIFIED_USER_PASSWORD` (if backend supports unverified-account auth behavior)
+- `MFA_USER_EMAIL`
+- `MFA_USER_PASSWORD`
+- `AUTH_LOCKOUT_PROBE_EMAIL`
+- `AUTH_LOCKOUT_PROBE_PASSWORD`
+- `STRICT_AUTH_CONTRACT`
+
+## Authentication Coverage
+
+- Ensure auth layer covers:
+  - valid login
+  - wrong password
+  - missing email/password
+  - invalid email format
+  - leading/trailing spaces
+  - email case sensitivity
+  - empty vs null vs omitted values
+  - long input values
+  - SQL injection attempts
+  - XSS attempts
+  - locked/suspended/deleted/unverified/MFA-enabled users
+  - lockout/cooldown
+  - token refresh/logout/session validation
+  - expired/tampered token rejection
+- Keep API negatives production-realistic in API tests; keep client-side blocked flows asserted in UI tests.
+
+## Strict Auth Contracts
+
+- Every auth assertion must validate:
+  - HTTP status code
+  - domain/error code
+  - message
+  - response schema/shape
+  - sensitive fields are absent
+- Never allow these fields in auth responses:
+  - `password`
+  - `passwordHash`
+  - `secret`
+  - `internalNotes`
+- Success contract baseline:
+  - `expect(response.status()).toBe(200)`
+  - `expect(body).toMatchObject({ success: true, accessToken: expect.any(String), refreshToken: expect.any(String) })`
+- Locked contract (`STRICT_AUTH_CONTRACT=true`):
+  - `expect(response.status()).toBe(403)`
+  - `expect(body).toMatchObject({ code: 'ACCOUNT_LOCKED', message: expect.any(String) })`
+- Suspended contract (`STRICT_AUTH_CONTRACT=true`):
+  - `expect([401, 403]).toContain(response.status())`
+  - `expect(body).toMatchObject({ code: expect.stringMatching(/ACCOUNT_SUSPENDED|UNAUTHORIZED/), message: expect.any(String) })`
+
+## MFA / 2FA Standard
+
+- Login response must match backend contract:
+  - `expect(body).toMatchObject({ success: true, message: '2FA code sent to registered email', requires2FA: true, userId: expect.any(String) })`
+  - `expect(body.accessToken).toBeUndefined()`
+  - `expect(body.refreshToken).toBeUndefined()`
+- Capture `userId` and reuse for OTP verification.
+- OTP verify success must return:
+  - `expect(verifyOtpBody).toMatchObject({ success: true, accessToken: expect.any(String), refreshToken: expect.any(String) })`
+- Negative OTP scenarios (if not already covered):
+  - invalid OTP
+  - expired OTP
+  - reused OTP
+  - missing OTP
+  - missing userId
+  - wrong userId
+  - too many OTP attempts
+  - OTP resend rate limit
+- If mailbox integration is missing, skip OTP-dependent specs gracefully.
+
+## Token and Session Requirements
+
+- Ensure coverage for:
+  - access token existence
+  - refresh token existence
+  - JWT structure validity
+  - refresh token rotation invalidates old token
+  - logout invalidates token
+  - protected/session endpoint rejects invalid token
+  - expired token rejection
+  - tampered token rejection
+
+## API-First Principle
+
+- All non-UI setup must use API helpers:
+  - login
+  - account/test-data creation
+  - payment-link creation
+  - wallet setup
+  - transfer setup
+  - transaction setup
+- Do not use UI for preconditions unless validating that UI workflow.
+
+## Financial Validation Rules
+
+- For payment/transfer/wallet/card/payment-link flows always validate:
+  - amount
+  - currency
+  - balance before/after
+  - status
+  - timestamp
+  - history/audit entry
+  - UI consistency with API
+- Release blockers:
+  - incorrect balance
+  - missing transaction
+  - duplicate transaction
+  - incorrect status
+  - silent failure
+  - empty history after successful action
+
+## UI Automation Standards
+
+- Selector priority:
+  1. `data-testid`
+  2. `aria-label`
+  3. role + visible text
+  4. semantic attributes
+- Never use:
+  - dynamic Chakra hashed selectors
+  - `nth-child`
+  - index-based selectors
+  - deep CSS selector chains
+- If no stable selector exists, require a `data-testid`.
+- For each UI action, assert:
+  - page/header correctness
+  - visible feedback message
+  - enabled/disabled state
+  - redirect/navigation correctness
+  - updated values on screen
+  - consistency with backend response
+
+## Global UI Interruptions
+
+- Implement reusable handlers for:
+  - cookie banner
+  - notification popup
+  - session timeout modal
+  - "Your New BizFlex Card Awaits" modal
+  - new card modal
+- Modal handling must:
+  - re-check visibility before clicking
+  - tolerate detach/re-render
+  - avoid hashed selectors unless no stable alternative exists
+
+## Waiting Strategy
+
+- Never use fixed waits as the primary synchronization strategy.
+- Use:
+  - API/network completion
+  - spinner/skeleton disappearance
+  - visible/hidden state transitions
+  - explicit response completion checks
+
+## Payment Link Standard
+
+- Keep payment-link pyramid at 70/20/10.
+- API coverage includes:
+  - create general link
+  - create unique link
+  - fetch by uid
+  - fetch published/draft
+  - update link
+  - update settings
+  - validate counts
+  - initiate order
+  - confirm order
+  - retrieve requests
+- Always validate:
+  - amount
+  - currency
+  - reference
+  - link URL
+  - status
+  - timestamp
+  - response schema
+- UI coverage remains focused on:
+  - dashboard loads
+  - copy action works
+  - modal opens
+  - success modal shows generated link
+  - published/draft list visible
+  - dashboard count matches API
+
+## CI and Stability Standards
+
+- Tests must run independently and in parallel.
+- Only lockout/cooldown flows may run serial:
+  - `test.describe.serial('lockout flow', () => { ... })`
+- Lockout tests must use dedicated probe accounts only.
+- If probe vars are missing, skip lockout tests (do not fail suite).
+- Retry strategy:
+  - `retries: process.env.CI ? 1 : 0`
+- Preserve failure artifacts:
+  - `trace: 'retain-on-failure'`
+  - `screenshot: 'only-on-failure'`
+  - `video: 'retain-on-failure'`
+- On failure, log:
+  - request payload
+  - response body
+  - headers
+  - correlation ID (if available)
+  - relevant UI state snapshot
+
+## Cucumber Usage
+
+- Use Cucumber only for high-value business journeys, e.g.:
+  - sign in -> transfer -> verify balance and transaction history
+  - create payment link -> customer pays -> dashboard reflects transaction
+  - request card -> card appears -> wallet reflects card transaction
+  - suspended user attempts restricted action and gets restriction message
+- Example feature names:
+  - `money-transfer.feature`
+  - `payment-link-payment.feature`
+  - `wallet-balance-update.feature`
+  - `restricted-account.feature`
+- Do not move simple validation, API contracts, token checks, negative field validation, or lockout edge cases into Cucumber.
+

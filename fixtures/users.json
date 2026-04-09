@@ -1,0 +1,19 @@
+{
+  "validUser": {
+    "email": "test-user@example.com",
+    "password": "your-password-here"
+  },
+  "lockedUser": {
+    "email": "locked-user@example.com",
+    "password": "your-password-here"
+  },
+  "suspendedUser": {
+    "email": "suspended-user@example.com",
+    "password": "your-password-here"
+  },
+  "mfaUser": {
+    "email": "mfa-user@example.com",
+    "password": "your-password-here"
+  }
+}
+

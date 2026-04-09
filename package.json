@@ -1,0 +1,28 @@
+{
+  "name": "bizflex-playwright",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright UI/API automation alongside Cypress (BizFlex fintech flows).",
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "auth": "ts-node -r dotenv/config utils/auth.ts",
+    "test": "npm run auth && playwright test",
+    "test:only": "playwright test",
+    "test:ui": "playwright test ui",
+    "test:interactive": "playwright test --ui",
+    "test:api": "playwright test api",
+    "test:e2e": "cucumber-js e2e/features --require-module ts-node/register --require e2e/support/**/*.ts --require e2e/step-definitions/**/*.ts",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:security": "playwright test --grep @security",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^12.2.0",
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
