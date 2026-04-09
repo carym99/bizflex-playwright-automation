@@ -1,4 +1,5 @@
-import { type Page, expect } from '@playwright/test';
+import { type Page, type TestInfo, expect } from '@playwright/test';
+import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
 import { paymentLinkSelectors as s } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
 
@@ -12,8 +13,9 @@ export type PaymentLinkForm = {
 export class PaymentLinkPage {
   constructor(private readonly page: Page) {}
 
-  async navigate(): Promise<void> {
+  async navigate(testInfo: TestInfo): Promise<void> {
     await this.page.goto('/payment-link', { waitUntil: 'domcontentloaded' });
+    await assertStillAuthenticated(this.page, testInfo, 'PaymentLinkPage.navigate after goto /payment-link');
     await ensureBizflexCardModalClosed(this.page);
     await expect(this.page).toHaveURL(/payment-link/i, { timeout: 45_000 });
   }

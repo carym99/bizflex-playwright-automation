@@ -1,4 +1,5 @@
-import { type Page, expect } from '@playwright/test';
+import { type Page, type TestInfo, expect } from '@playwright/test';
+import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
 import { paymentSelectors as pay } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
 
@@ -17,8 +18,11 @@ export type CardDetails = {
 export class PaymentPage {
   constructor(private readonly page: Page) {}
 
-  async gotoPaymentPath(path = '/payment'): Promise<void> {
+  async gotoPaymentPath(path = '/payment', testInfo?: TestInfo): Promise<void> {
     await this.page.goto(path, { waitUntil: 'domcontentloaded' });
+    if (testInfo) {
+      await assertStillAuthenticated(this.page, testInfo, `PaymentPage.gotoPaymentPath ${path}`);
+    }
     await ensureBizflexCardModalClosed(this.page);
   }
 

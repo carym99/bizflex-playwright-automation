@@ -1,4 +1,5 @@
-import { type Page, type Locator, expect } from '@playwright/test';
+import { type Page, type Locator, type TestInfo, expect } from '@playwright/test';
+import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
 import { loginSelectors as s } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
 
@@ -15,8 +16,9 @@ export class LoginPage {
   }
 
   /** ~20% UI check: authenticated session can load account shell. */
-  async verifyLoggedIn(): Promise<void> {
+  async verifyLoggedIn(testInfo: TestInfo): Promise<void> {
     await this.page.goto('/account', { waitUntil: 'domcontentloaded' });
+    await assertStillAuthenticated(this.page, testInfo, 'LoginPage.verifyLoggedIn');
     await ensureBizflexCardModalClosed(this.page);
     await expect(this.page).toHaveURL(/\/account/i, { timeout: 45_000 });
     const body = this.page.locator('body');

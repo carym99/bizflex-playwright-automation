@@ -1,12 +1,14 @@
-import { type Page, expect } from '@playwright/test';
+import { type Page, type TestInfo, expect } from '@playwright/test';
+import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
 import { transactionSelectors as s } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
 
 export class TransactionPage {
   constructor(private readonly page: Page) {}
 
-  async visitHistory(): Promise<void> {
+  async visitHistory(testInfo: TestInfo): Promise<void> {
     await this.page.goto('/transactions', { waitUntil: 'domcontentloaded' });
+    await assertStillAuthenticated(this.page, testInfo, 'after goto /transactions');
     await ensureBizflexCardModalClosed(this.page);
     await expect(this.page).toHaveURL(/transactions/i, { timeout: 45_000 });
   }
@@ -25,8 +27,9 @@ export class TransactionPage {
   }
 
   /** Balance/widgets on account — paired with transaction history verification */
-  async assertBalanceWidgetVisible(): Promise<void> {
+  async assertBalanceWidgetVisible(testInfo: TestInfo): Promise<void> {
     await this.page.goto('/account', { waitUntil: 'domcontentloaded' });
+    await assertStillAuthenticated(this.page, testInfo, 'assertBalanceWidgetVisible after goto /account');
     await ensureBizflexCardModalClosed(this.page);
     const w = this.page.locator(s.balanceWidget).first();
     if (await w.isVisible().catch(() => false)) {
