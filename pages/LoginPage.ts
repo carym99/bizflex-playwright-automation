@@ -1,7 +1,12 @@
-import { type Page, type Locator, type TestInfo, expect } from '@playwright/test';
+import { type Page, type TestInfo, expect } from '@playwright/test';
 import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
-import { loginSelectors as s } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
+import {
+  assertLoginFormReady,
+  getLoginEmailInput,
+  getLoginPasswordInput,
+  getLoginSubmitButton,
+} from '../support/ui/loginHelpers';
 
 /**
  * Minimal UI login + verification — mirrors stable Cypress authSelectors.
@@ -9,11 +14,6 @@ import { ensureBizflexCardModalClosed } from '../utils/modal';
  */
 export class LoginPage {
   constructor(private readonly page: Page) {}
-
-  private firstMatching(selectors: string): Locator {
-    const parts = selectors.split(',').map((x) => x.trim());
-    return this.page.locator(parts.join(', ')).first();
-  }
 
   /** ~20% UI check: authenticated session can load account shell. */
   async verifyLoggedIn(testInfo: TestInfo): Promise<void> {
@@ -30,12 +30,10 @@ export class LoginPage {
    */
   async uiLogin(email: string, password: string): Promise<void> {
     await this.page.goto('/login', { waitUntil: 'domcontentloaded' });
-    const emailInput = this.firstMatching(s.email);
-    const passwordInput = this.firstMatching(s.password);
-    const submitButton = this.firstMatching(s.submit);
-    await expect(emailInput).toBeVisible();
-    await expect(passwordInput).toBeVisible();
-    await expect(submitButton).toBeVisible();
+    await assertLoginFormReady(this.page);
+    const emailInput = getLoginEmailInput(this.page);
+    const passwordInput = getLoginPasswordInput(this.page);
+    const submitButton = getLoginSubmitButton(this.page);
     await emailInput.fill(email);
     await passwordInput.fill(password);
     await expect(submitButton).toBeEnabled();

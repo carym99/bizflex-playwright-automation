@@ -3,8 +3,14 @@ import { expect } from '@playwright/test';
 import { E2EWorld } from '../support/world';
 import { LoginPage } from '../../pages/LoginPage';
 import { getUiEmail, getValidPassword } from '../../fixtures/auth.fixture';
-import { loginSelectors, transactionSelectors } from '../../utils/selectors';
+import { transactionSelectors } from '../../utils/selectors';
 import { assertRecentTransactionsTableVisible } from '../../utils/dashboard';
+import {
+  assertLoginFormReady,
+  getLoginEmailInput,
+  getLoginPasswordInput,
+  getLoginSubmitButton,
+} from '../../support/ui/loginHelpers';
 
 Before(async function (this: E2EWorld) {
   this.browser = await (await import('@playwright/test')).chromium.launch({ headless: true });
@@ -66,18 +72,13 @@ Then('I should see the recent transactions table', async function (this: E2EWorl
 
 When('I sign in with an MFA-enabled account', async function (this: E2EWorld) {
   const mfaEmail = process.env.MFA_USER_EMAIL || getUiEmail();
-  const emailInput = this.page!.locator(loginSelectors.email).first();
-  const passwordInput = this.page!.locator(loginSelectors.password).first();
-  const submitButton = this.page!.locator(loginSelectors.submit).first();
-  await expect(emailInput).toBeVisible({ timeout: 20_000 });
-  await expect(passwordInput).toBeVisible({ timeout: 20_000 });
-  await expect(submitButton).toBeVisible({ timeout: 20_000 });
+  await assertLoginFormReady(this.page!);
+  const emailInput = getLoginEmailInput(this.page!);
+  const passwordInput = getLoginPasswordInput(this.page!);
+  const submitButton = getLoginSubmitButton(this.page!);
 
   await emailInput.fill(mfaEmail);
-  await this.page!
-    .locator(loginSelectors.password)
-    .first()
-    .fill(getValidPassword());
+  await passwordInput.fill(getValidPassword());
   await expect(submitButton).toBeEnabled();
   await submitButton.click();
 });

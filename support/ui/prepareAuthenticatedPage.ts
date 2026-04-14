@@ -25,12 +25,10 @@ async function waitForAccountOrLoginRoute(page: Page): Promise<void> {
 export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): Promise<void> {
   const sessionSeed = readAuthSessionSeed();
   if (sessionSeed) {
-    const target = process.env.PLAYWRIGHT_BASE_URL || '/login';
-    await page.goto(target, { waitUntil: 'domcontentloaded' });
-    await page.evaluate(
+    await page.addInitScript(
       ({ user, email }) => {
-        sessionStorage.setItem('user', JSON.stringify(user));
-        sessionStorage.setItem('email', email);
+        window.sessionStorage.setItem('user', JSON.stringify(user));
+        window.sessionStorage.setItem('email', email);
       },
       { user: sessionSeed.user, email: sessionSeed.email }
     );

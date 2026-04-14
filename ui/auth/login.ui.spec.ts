@@ -4,27 +4,29 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { LoginPage } from '../../pages/LoginPage';
-import { loginSelectors } from '../../utils/selectors';
 import { getUiEmail, getValidPassword, suspendedAccountMessage } from '../../fixtures/auth.fixture';
 import { isAuthLoginRequest } from '../../utils/loginResponse';
+import {
+  assertLoginFormReady,
+  getLoginEmailInput,
+  getLoginPasswordInput,
+  getLoginSubmitButton,
+} from '../../support/ui/loginHelpers';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
 function loginButton(page: Page) {
-  return page.locator(loginSelectors.submit).first();
+  return getLoginSubmitButton(page);
 }
 
 test.describe('@ui @auth User Login UI', () => {
   test('shows validation message for invalid email format', async ({ page }) => {
     test.setTimeout(60_000);
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
-    const emailInput = page.locator(loginSelectors.email).first();
-    const passwordInput = page.locator(loginSelectors.password).first();
+    await assertLoginFormReady(page);
+    const emailInput = getLoginEmailInput(page);
+    const passwordInput = getLoginPasswordInput(page);
     const submitButton = loginButton(page);
-
-    await expect(emailInput).toBeVisible({ timeout: 20_000 });
-    await expect(passwordInput).toBeVisible({ timeout: 20_000 });
-    await expect(submitButton).toBeVisible({ timeout: 20_000 });
 
     await emailInput.fill('invalid-email');
     await passwordInput.fill(getValidPassword());
@@ -37,18 +39,19 @@ test.describe('@ui @auth User Login UI', () => {
 
   test('shows validation for only password entered', async ({ page }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await assertLoginFormReady(page);
     let loginPosts = 0;
     page.on('request', (request) => {
       if (isAuthLoginRequest(request)) loginPosts += 1;
     });
 
-    await page.locator(loginSelectors.password).first().fill(getValidPassword());
+    await getLoginPasswordInput(page).fill(getValidPassword());
     const submitButton = loginButton(page);
     await expect(submitButton).toBeVisible();
     await expect(submitButton).toBeDisabled();
 
     await expect.poll(() => loginPosts, { timeout: 3_000 }).toBe(0);
-    await expect(page.locator(loginSelectors.email).first()).toBeVisible();
+    await expect(getLoginEmailInput(page)).toBeVisible();
   });
 
   test('logs in via UI and redirects to /account', async ({ page }) => {
@@ -71,9 +74,10 @@ test.describe('@ui @auth User Login UI', () => {
     });
 
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await assertLoginFormReady(page);
     const suspendedEmail = process.env.SUSPENDED_USER_EMAIL || getUiEmail();
-    await page.locator(loginSelectors.email).first().fill(suspendedEmail);
-    await page.locator(loginSelectors.password).first().fill(getValidPassword());
+    await getLoginEmailInput(page).fill(suspendedEmail);
+    await getLoginPasswordInput(page).fill(getValidPassword());
     await expect(loginButton(page)).toBeEnabled();
     await loginButton(page).click();
 
@@ -98,9 +102,10 @@ test.describe('@ui @auth User Login UI', () => {
     });
 
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await assertLoginFormReady(page);
     const mfaEmail = process.env.MFA_USER_EMAIL || getUiEmail();
-    await page.locator(loginSelectors.email).first().fill(mfaEmail);
-    await page.locator(loginSelectors.password).first().fill(getValidPassword());
+    await getLoginEmailInput(page).fill(mfaEmail);
+    await getLoginPasswordInput(page).fill(getValidPassword());
     const loginResponsePromise = page.waitForResponse((response) => isAuthLoginRequest(response.request()));
     await expect(loginButton(page)).toBeEnabled();
     await loginButton(page).click();
