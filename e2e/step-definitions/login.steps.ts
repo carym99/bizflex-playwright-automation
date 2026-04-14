@@ -3,7 +3,7 @@ import { expect } from '@playwright/test';
 import { E2EWorld } from '../support/world';
 import { LoginPage } from '../../pages/LoginPage';
 import { getUiEmail, getValidPassword } from '../../fixtures/auth.fixture';
-import { transactionSelectors } from '../../utils/selectors';
+import { loginSelectors, transactionSelectors } from '../../utils/selectors';
 import { assertRecentTransactionsTableVisible } from '../../utils/dashboard';
 
 Before(async function (this: E2EWorld) {
@@ -66,12 +66,20 @@ Then('I should see the recent transactions table', async function (this: E2EWorl
 
 When('I sign in with an MFA-enabled account', async function (this: E2EWorld) {
   const mfaEmail = process.env.MFA_USER_EMAIL || getUiEmail();
-  await this.page!.locator('[data-testid="email"], [data-testid="email-input"], input[type="email"]').first().fill(mfaEmail);
+  const emailInput = this.page!.locator(loginSelectors.email).first();
+  const passwordInput = this.page!.locator(loginSelectors.password).first();
+  const submitButton = this.page!.locator(loginSelectors.submit).first();
+  await expect(emailInput).toBeVisible({ timeout: 20_000 });
+  await expect(passwordInput).toBeVisible({ timeout: 20_000 });
+  await expect(submitButton).toBeVisible({ timeout: 20_000 });
+
+  await emailInput.fill(mfaEmail);
   await this.page!
-    .locator('[data-testid="password"], [data-testid="password-input"], input[type="password"]')
+    .locator(loginSelectors.password)
     .first()
     .fill(getValidPassword());
-  await this.page!.getByRole('button', { name: /login|sign in/i }).first().click();
+  await expect(submitButton).toBeEnabled();
+  await submitButton.click();
 });
 
 Then('I should see that a 2FA code was sent', async function (this: E2EWorld) {

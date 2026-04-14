@@ -10,7 +10,7 @@ test.describe('@ui @auth @smoke User Login flow', () => {
     await loginPage.uiLogin(getUiEmail(), getValidPassword());
 
     await expect(page).toHaveURL(/\/account/i, { timeout: 45_000 });
-    await expect(page.locator('body')).toContainText(/quick action|dashboard|account/i, {
+    await expect(page.getByText(/quick action|dashboard|account/i).first()).toBeVisible({
       timeout: 20_000,
     });
   });

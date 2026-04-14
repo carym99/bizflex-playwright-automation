@@ -1,59 +1,151 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { chromium, request as playwrightRequest } from '@playwright/test';
-import { resolveApiUrl, extractTokenFromLoginBody } from '../../utils/api';
-import { persistStorageStateFromLoginBody } from '../../utils/authStorage';
+import { resolveApiUrl, extractTokenFromLoginBody, extractRefreshTokenFromLoginBody } from '../../utils/api';
 import { isLikelyJwt } from '../../schemas/token.schema';
 import { logAuthDiagnostics } from './debugAuthState';
 import { loginByApi } from './loginByApi';
 
 const STORAGE_FILENAME = 'authenticated-user.json';
+const SESSION_SEED_FILENAME = 'authenticated-session-seed.json';
 
 /**
  * UI origin for `localStorage` / `storageState` must match the deployed SPA (e.g. Netlify),
  * not the API host — otherwise injected tokens never apply in the browser.
  */
 function resolveUiBaseUrlForAuthStorage(): string {
-  const raw =
-    process.env.BASE_URL ||
-    process.env.PLAYWRIGHT_BASE_URL ||
-    'https://bizflex-app.netlify.app';
-  return raw.replace(/\/$/, '');
+  const raw = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'https://bizflex-app.netlify.app/login';
+  return raw.trim().replace(/\/$/, '');
 }
 
-async function validateSeededStorageAllowsAccount(outPath: string, uiBaseUrl: string): Promise<void> {
+function toSpaOrigin(urlLike: string): string {
+  return new URL(urlLike).origin;
+}
+
+type LoginApiResponse = {
+  message?: unknown;
+  accessToken?: unknown;
+  refreshToken?: unknown;
+  data?: unknown;
+  [key: string]: unknown;
+};
+
+type AuthSessionSeed = {
+  user: LoginApiResponse;
+  email: string;
+};
+
+function toLoginApiResponse(body: unknown): LoginApiResponse {
+  if (!body || typeof body !== 'object') {
+    throw new Error('[auth-storage] Login response body is not an object.');
+  }
+  return body as LoginApiResponse;
+}
+
+function getAuthSessionSeedPath(): string {
+  return path.join(__dirname, '..', '..', 'storage', SESSION_SEED_FILENAME);
+}
+
+async function persistAuthSessionSeed(loginResponse: LoginApiResponse, email: string): Promise<void> {
+  const seedPath = getAuthSessionSeedPath();
+  await fs.promises.mkdir(path.dirname(seedPath), { recursive: true });
+  await fs.promises.writeFile(
+    seedPath,
+    JSON.stringify(
+      {
+        user: loginResponse,
+        email,
+      } satisfies AuthSessionSeed,
+      null,
+      2
+    ),
+    'utf8'
+  );
+}
+
+export function readAuthSessionSeed(): AuthSessionSeed | null {
+  const seedPath = getAuthSessionSeedPath();
+  if (!fs.existsSync(seedPath)) return null;
+  try {
+    const raw = fs.readFileSync(seedPath, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<AuthSessionSeed>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (!parsed.user || typeof parsed.user !== 'object') return null;
+    if (!parsed.email || typeof parsed.email !== 'string') return null;
+    return { user: parsed.user as LoginApiResponse, email: parsed.email };
+  } catch {
+    return null;
+  }
+}
+
+async function seedBrowserStorageAndSaveState(
+  outPath: string,
+  uiBaseUrl: string,
+  loginResponse: LoginApiResponse
+): Promise<void> {
   const browser = await chromium.launch();
   try {
-    const context = await browser.newContext({
-      storageState: outPath,
-      baseURL: uiBaseUrl,
-    });
+    const spaOrigin = toSpaOrigin(uiBaseUrl);
+    const context = await browser.newContext({ baseURL: spaOrigin });
     const page = await context.newPage();
     try {
-      await page.goto('/account', { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('load');
-      await page
-        .waitForFunction(
-          () => {
-            const p = window.location.pathname.toLowerCase();
-            return p.includes('account') || p.includes('login');
-          },
-          { timeout: 25_000 }
-        )
-        .catch(() => {});
+      const playwrightBaseUrl = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
+      await page.goto(playwrightBaseUrl, {
+        waitUntil: 'networkidle',
+      });
+      const email = process.env.TEST_EMAIL;
+      if (!email) {
+        throw new Error('[auth-storage] TEST_EMAIL is required to seed sessionStorage.email');
+      }
 
-      const url = page.url();
-      if (/\/login/i.test(url)) {
-        console.error('[auth-storage] Redirected to login despite seeded auth — URL:', url);
-        await logAuthDiagnostics(page, 'post-seed validation');
-        throw new Error(
-          'Seeded storageState redirected to /login. Confirm BASE_URL matches the SPA origin and login API returns tokens the app expects.'
-        );
+      const accessToken = extractTokenFromLoginBody(loginResponse);
+      if (!accessToken) {
+        throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
       }
-      if (!/\/account/i.test(url)) {
-        console.warn('[auth-storage] Unexpected URL after navigating to /account:', url);
+      const refreshToken = extractRefreshTokenFromLoginBody(loginResponse) ?? '';
+
+      await page.evaluate(
+        ({ loginResponse, email }) => {
+          const typedResponse = loginResponse as { accessToken?: unknown; refreshToken?: unknown };
+          const access = typeof typedResponse.accessToken === 'string' ? typedResponse.accessToken : '';
+          const refresh = typeof typedResponse.refreshToken === 'string' ? typedResponse.refreshToken : '';
+
+          localStorage.setItem('token', access);
+          localStorage.setItem('accessToken', access);
+          localStorage.setItem('authToken', access);
+          localStorage.setItem('refreshToken', refresh);
+
+          sessionStorage.setItem('user', JSON.stringify(loginResponse));
+          sessionStorage.setItem('email', email);
+        },
+        {
+          loginResponse: { ...loginResponse, accessToken, refreshToken },
+          email,
+        }
+      );
+
+      const debugState = await page.evaluate(() => ({
+        localStorage: { ...localStorage },
+        sessionStorage: { ...sessionStorage },
+      }));
+
+      console.log('[auth-storage] post-seed browser state', JSON.stringify(debugState, null, 2));
+
+      if (!debugState.sessionStorage.user) {
+        throw new Error('sessionStorage.user was not set after auth seeding');
       }
-      console.log('[auth-storage] Auth state seeded successfully — /account did not redirect to login');
+
+      await page.goto(`${playwrightBaseUrl}/account`, {
+        waitUntil: 'networkidle',
+      });
+      if (/\/login/i.test(page.url())) {
+        await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check');
+        throw new Error('Seeded browser session redirected to /login during /account check');
+      }
+
+      await persistAuthSessionSeed({ ...loginResponse, accessToken, refreshToken }, email);
+      await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
+      await context.storageState({ path: outPath });
     } finally {
       await page.close();
       await context.close();
@@ -137,10 +229,11 @@ function resolveCredentials(): { email: string; password: string } {
  */
 export async function getAuthenticatedStorageState(): Promise<string> {
   const outPath = getAuthenticatedStorageStatePath();
+  const uiBaseUrl = resolveUiBaseUrlForAuthStorage();
 
   if (!fs.existsSync(outPath)) {
     console.log('[auth-storage] No storage file yet — generating new session');
-    return regenerateStorage(outPath, resolveUiBaseUrlForAuthStorage());
+    return regenerateStorage(outPath, uiBaseUrl);
   }
 
   let raw: string;
@@ -148,7 +241,7 @@ export async function getAuthenticatedStorageState(): Promise<string> {
     raw = fs.readFileSync(outPath, 'utf8');
   } catch (e) {
     console.warn('[auth-storage] Could not read storage file — regenerating', e);
-    return regenerateStorage(outPath, resolveUiBaseUrlForAuthStorage());
+    return regenerateStorage(outPath, uiBaseUrl);
   }
 
   let parsed: StorageStateFile;
@@ -156,26 +249,31 @@ export async function getAuthenticatedStorageState(): Promise<string> {
     parsed = JSON.parse(raw) as StorageStateFile;
   } catch {
     console.warn('[auth-storage] Invalid storage JSON — regenerating');
-    return regenerateStorage(outPath, resolveUiBaseUrlForAuthStorage());
+    return regenerateStorage(outPath, uiBaseUrl);
   }
 
   const token = readTokenFromStorageJson(parsed);
   if (!token) {
     console.log('[auth-storage] No token in storage file — new session generated');
-    return regenerateStorage(outPath, resolveUiBaseUrlForAuthStorage());
+    return regenerateStorage(outPath, uiBaseUrl);
   }
 
   const exp = decodeJwtExpSeconds(token);
   const nowSec = Math.floor(Date.now() / 1000);
   if (exp !== null && exp <= nowSec + JWT_SKEW_SECONDS) {
     console.log('[auth-storage] Session expired (JWT exp) — regenerating');
-    return regenerateStorage(outPath, resolveUiBaseUrlForAuthStorage());
+    return regenerateStorage(outPath, uiBaseUrl);
   }
 
   const apiOk = await isAccessTokenAcceptedByApi(token);
   if (!apiOk) {
     console.log('[auth-storage] Session rejected by API (expired or revoked) — regenerating');
-    return regenerateStorage(outPath, resolveUiBaseUrlForAuthStorage());
+    return regenerateStorage(outPath, uiBaseUrl);
+  }
+
+  if (!readAuthSessionSeed()) {
+    console.log('[auth-storage] Missing session seed file — regenerating');
+    return regenerateStorage(outPath, uiBaseUrl);
   }
 
   console.log('[auth-storage] Existing session reused:', outPath);
@@ -186,13 +284,12 @@ async function regenerateStorage(outPath: string, uiBaseUrl: string): Promise<st
   const { email, password } = resolveCredentials();
   const ctx = await playwrightRequest.newContext();
   try {
-    const body = await loginByApi(ctx, email, password);
+    const body = toLoginApiResponse(await loginByApi(ctx, email, password));
     const token = extractTokenFromLoginBody(body);
     if (!token) {
       throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
     }
-    await persistStorageStateFromLoginBody(body, uiBaseUrl, outPath);
-    await validateSeededStorageAllowsAccount(outPath, uiBaseUrl);
+    await seedBrowserStorageAndSaveState(outPath, uiBaseUrl, body);
     console.log('[auth-storage] New session generated:', outPath);
     return outPath;
   } finally {

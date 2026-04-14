@@ -30,9 +30,16 @@ export class LoginPage {
    */
   async uiLogin(email: string, password: string): Promise<void> {
     await this.page.goto('/login', { waitUntil: 'domcontentloaded' });
-    await this.firstMatching(s.email).fill(email);
-    await this.firstMatching(s.password).fill(password);
-    await this.page.getByRole('button', { name: /login|sign in/i }).first().click();
+    const emailInput = this.firstMatching(s.email);
+    const passwordInput = this.firstMatching(s.password);
+    const submitButton = this.firstMatching(s.submit);
+    await expect(emailInput).toBeVisible();
+    await expect(passwordInput).toBeVisible();
+    await expect(submitButton).toBeVisible();
+    await emailInput.fill(email);
+    await passwordInput.fill(password);
+    await expect(submitButton).toBeEnabled();
+    await submitButton.click();
     await expect(this.page).toHaveURL(/\/account/i, { timeout: 45_000 });
     await ensureBizflexCardModalClosed(this.page);
   }

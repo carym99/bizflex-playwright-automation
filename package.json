@@ -11,8 +11,11 @@
     "test:ui": "playwright test ui",
     "test:interactive": "playwright test --ui",
     "test:api": "playwright test api",
+    "test:auth": "playwright test --grep @auth",
+    "test:api-auth": "playwright test --project=api --grep @api --grep @auth",
     "test:e2e": "cucumber-js e2e/features --require-module ts-node/register --require e2e/support/**/*.ts --require e2e/step-definitions/**/*.ts",
     "test:smoke": "playwright test --grep @smoke",
+    "test:regression": "playwright test --grep @regression",
     "test:security": "playwright test --grep @security",
     "report": "playwright show-report"
   },

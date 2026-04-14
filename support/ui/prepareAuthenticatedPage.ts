@@ -4,6 +4,7 @@ import { dismissCardModal } from './dismissCardModal';
 import { dismissCookieBanner } from './dismissCookieBanner';
 import { handleSessionTimeout } from './handleSessionTimeout';
 import { waitForDashboardReadiness } from './dashboardReadiness';
+import { readAuthSessionSeed } from '../auth/storageState';
 
 async function waitForAccountOrLoginRoute(page: Page): Promise<void> {
   await page
@@ -22,6 +23,19 @@ async function waitForAccountOrLoginRoute(page: Page): Promise<void> {
  * Always pass `testInfo` so an unexpected `/login` redirect attaches `auth-diagnostics.json` + screenshot.
  */
 export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): Promise<void> {
+  const sessionSeed = readAuthSessionSeed();
+  if (sessionSeed) {
+    const target = process.env.PLAYWRIGHT_BASE_URL || '/login';
+    await page.goto(target, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(
+      ({ user, email }) => {
+        sessionStorage.setItem('user', JSON.stringify(user));
+        sessionStorage.setItem('email', email);
+      },
+      { user: sessionSeed.user, email: sessionSeed.email }
+    );
+  }
+
   await page.goto('/account', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('load');
   await waitForAccountOrLoginRoute(page);
