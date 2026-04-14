@@ -1,0 +1,53 @@
+---
+alwaysApply: true
+---
+# Objective
+
+Build a Playwright-based automation agent using TypeScript that can:
+
+- Collect and analyze web data
+- Validate UI and API behavior
+- Generate structured outputs (logs, reports, drafts)
+- Support scalable QA and automation workflows
+
+# Approach
+
+Use a simple modular structure:
+
+1. Data collection (Playwright)
+2. Parsing and normalization
+3. Validation (UI and API)
+4. Output generation
+5. Reporting and logging
+
+# Architecture
+
+[Collector] → [Parser] → [Validator] → [Generator] → [Reporter]
+
+# Project Structure
+
+src/
+  collectors/
+  parsers/
+  validators/
+  services/
+  workflows/
+  utils/
+
+data/
+reports/
+tests/
+config/
+
+# Rules
+
+- Use TypeScript only
+- Use Playwright for browser automation
+- Use Page Object Model where appropriate
+- Prefer `data-testid` selectors
+- Never use `waitForTimeout`
+- Use Playwright auto-waiting
+- Generate reusable, modular code
+- Save reports into `/reports`
+- Add logging and error handling to every workflow
+- Keep tests independent and parallel-safe

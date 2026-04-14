@@ -1,0 +1,43 @@
+# Testing Standards (Playwright + Cucumber)
+
+## Core Principles
+
+- Playwright Test is the primary framework.
+- Cucumber is used only for a small number of business-readable end-to-end flows.
+- Do not convert the entire framework to Cucumber.
+- Reuse existing helpers, fixtures, selectors, auth utilities, and page objects.
+- Avoid duplicate test suites.
+
+### Coverage Pyramid
+
+- 70% API, contract, and session-injected tests
+- 20% focused UI validation
+- 10% true end-to-end business journeys
+
+---
+
+## Recommended Workflow
+
+Write (TypeScript + POM)
+→ Debug (Playwright UI Mode)
+→ Push (Git PR)
+→ Run in CI (4 shards in parallel)
+→ Review failure trace
+→ Merge only if all checks pass
+→ Deploy
+
+---
+
+## Framework Structure
+
+```text
+playwright/
+  api/
+  ui/
+  e2e/
+    features/
+    step-definitions/
+  helpers/
+  fixtures/
+  page-objects/
+  schemas/
