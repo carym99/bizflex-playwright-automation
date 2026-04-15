@@ -20,6 +20,8 @@ const FAILED_LOGIN_BUDGET_MS =
     ? failedLoginBudgetOverride
     : defaultFailedLoginBudgetMs;
 const VALIDATION_OR_AUTH_STATUSES = [400, 401, 403, 404, 415, 422];
+const NETWORK_RETRY_ATTEMPTS = process.env.CI ? 3 : 2;
+const NETWORK_RETRY_DELAY_MS = 350;
 
 function expectWithinBudget(durationMs: number, budgetMs: number, label: string): void {
   expect(
@@ -30,7 +32,7 @@ function expectWithinBudget(durationMs: number, budgetMs: number, label: string)
 
 async function postLogin(request: APIRequestContext, email: unknown, password: unknown) {
   const started = Date.now();
-  const res = await request.post(resolveApiUrl(getLoginPath()), {
+  const res = await postLoginWithTransientRetry(request, {
     data: { email, password },
     headers: { Accept: '*/*', 'Content-Type': 'application/json' },
     failOnStatusCode: false,
@@ -38,6 +40,46 @@ async function postLogin(request: APIRequestContext, email: unknown, password: u
   const durationMs = Date.now() - started;
   const body = asRecord(await res.json().catch(() => ({})));
   return { res, durationMs, body };
+}
+
+function isTransientNetworkFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toUpperCase();
+  return (
+    msg.includes('ECONNRESET') ||
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('EHOSTUNREACH') ||
+    msg.includes('ENOTFOUND')
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postLoginWithTransientRetry(
+  request: APIRequestContext,
+  options: Parameters<APIRequestContext['post']>[1]
+) {
+  const url = resolveApiUrl(getLoginPath());
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= NETWORK_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await request.post(url, options);
+    } catch (err) {
+      lastError = err;
+      if (!isTransientNetworkFailure(err) || attempt === NETWORK_RETRY_ATTEMPTS) {
+        throw err;
+      }
+      console.warn(
+        `[login.api] transient network error on attempt ${attempt}/${NETWORK_RETRY_ATTEMPTS}; retrying`,
+        err
+      );
+      await sleep(NETWORK_RETRY_DELAY_MS * attempt);
+    }
+  }
+  throw lastError;
 }
 
 test.describe('@api @auth @regression Login API', () => {
@@ -48,7 +90,7 @@ test.describe('@api @auth @regression Login API', () => {
     test.skip(!process.env.TEST_PASSWORD, 'Set TEST_PASSWORD');
 
     const started = Date.now();
-    const res = await request.post(loginUrl(), {
+    const res = await postLoginWithTransientRetry(request, {
       data: {
         email: getValidEmail(),
         password: getValidPassword(),
@@ -72,7 +114,7 @@ test.describe('@api @auth @regression Login API', () => {
     test.skip(!process.env.VALID_USER_EMAIL && !process.env.TEST_EMAIL, 'Set VALID_USER_EMAIL or TEST_EMAIL');
 
     const started = Date.now();
-    const res = await request.post(loginUrl(), {
+    const res = await postLoginWithTransientRetry(request, {
       data: {
         email: getValidEmail(),
         password: 'wrong-password-for-negative-test',
@@ -89,7 +131,7 @@ test.describe('@api @auth @regression Login API', () => {
 
   test('rejects non-existent account credentials (auth negative)', async ({ request }) => {
     const started = Date.now();
-    const res = await request.post(loginUrl(), {
+    const res = await postLoginWithTransientRetry(request, {
       data: {
         email: 'does-not-exist-auth-check@example.com',
         password: 'NotTheRightPassword123!',
@@ -106,7 +148,7 @@ test.describe('@api @auth @regression Login API', () => {
 
   test('rejects malformed payload schema without leaking sensitive fields', async ({ request }) => {
     const started = Date.now();
-    const res = await request.post(loginUrl(), {
+    const res = await postLoginWithTransientRetry(request, {
       data: { email: 12345, password: { raw: true } },
       headers: { Accept: '*/*', 'Content-Type': 'application/json' },
       failOnStatusCode: false,
@@ -168,7 +210,7 @@ test.describe('@api @auth @regression Login API', () => {
 
   test('rejects omitted email/password fields', async ({ request }) => {
     const started = Date.now();
-    const res = await request.post(loginUrl(), {
+    const res = await postLoginWithTransientRetry(request, {
       data: {},
       headers: { Accept: '*/*', 'Content-Type': 'application/json' },
       failOnStatusCode: false,

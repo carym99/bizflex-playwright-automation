@@ -5,7 +5,7 @@ import * as path from 'path';
 /**
  * Authenticated UI uses `storage/authenticated-user.json`.
  * Session is seeded on the **SPA origin** (default https://bizflex-app.netlify.app), not the API host,
- * so `PLAYWRIGHT_BASE_URL` must match where the browser loads the app.
+ * so `PLAYWRIGHT_BASE_URL`/`BASE_URL` must match where the browser loads the app.
  */
 loadEnv({ path: path.join(__dirname, '.env.local') });
 loadEnv({ path: path.join(__dirname, '.env') });
@@ -30,7 +30,7 @@ export default defineConfig({
 
   use: {
     /** Must match the Netlify (or other) UI origin used when writing `storage/authenticated-user.json`. */
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'https://bizflex-app.netlify.app/login',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'https://bizflex-app.netlify.app',
     headless: true,
     actionTimeout: 15_000,
     navigationTimeout: process.env.CI ? 45_000 : 30_000,

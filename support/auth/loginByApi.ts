@@ -8,6 +8,25 @@ import {
 import type { BrowserAuthLocalSeed } from '../../utils/authStorage';
 import { getLoginPath } from '../../fixtures/auth.fixture';
 
+const AUTH_NETWORK_RETRY_ATTEMPTS = process.env.CI ? 3 : 2;
+const AUTH_NETWORK_RETRY_DELAY_MS = 350;
+
+function isTransientNetworkFailure(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toUpperCase();
+  return (
+    msg.includes('ECONNRESET') ||
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('EHOSTUNREACH') ||
+    msg.includes('ENOTFOUND')
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Login via the BizFlex auth API using Playwright's request context.
  * Uses API_URL + AUTH_API_LOGIN_PATH (default /v1/auth/login), not BASE_URL,
@@ -19,11 +38,31 @@ export async function loginByApi(
   password: string
 ): Promise<unknown> {
   const url = resolveApiUrl(getLoginPath());
-  const response = await requestContext.post(url, {
-    data: { email, password },
-    headers: { Accept: '*/*', 'Content-Type': 'application/json' },
-    failOnStatusCode: false,
-  });
+  let response;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= AUTH_NETWORK_RETRY_ATTEMPTS; attempt++) {
+    try {
+      response = await requestContext.post(url, {
+        data: { email, password },
+        headers: { Accept: '*/*', 'Content-Type': 'application/json' },
+        failOnStatusCode: false,
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      if (!isTransientNetworkFailure(err) || attempt === AUTH_NETWORK_RETRY_ATTEMPTS) {
+        throw err;
+      }
+      console.warn(
+        `[loginByApi] transient network error attempt ${attempt}/${AUTH_NETWORK_RETRY_ATTEMPTS}; retrying`,
+        err
+      );
+      await sleep(AUTH_NETWORK_RETRY_DELAY_MS * attempt);
+    }
+  }
+  if (!response) {
+    throw (lastError as Error) ?? new Error('[loginByApi] request failed before receiving a response');
+  }
 
   const text = await response.text();
   let body: unknown;
@@ -35,7 +74,7 @@ export async function loginByApi(
 
   if (response.status() !== 200) {
     throw new Error(
-      `[loginByApi] HTTP ${response.status} for POST ${url} — ${String(text).slice(0, 500)}`
+      `[loginByApi] HTTP ${response.status()} for POST ${url} — ${String(text).slice(0, 500)}`
     );
   }
 

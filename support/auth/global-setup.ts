@@ -12,17 +12,17 @@ export default async function globalSetup(): Promise<void> {
   const startedAt = Date.now();
   try {
     const apiUrl = process.env.API_URL;
-    const playwrightBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+    const spaUrl = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL;
 
     if (!apiUrl) {
       throw new Error('Missing API_URL. Global setup requires API_URL for auth login calls.');
     }
-    if (!playwrightBaseUrl) {
-      throw new Error('Missing PLAYWRIGHT_BASE_URL. Global setup requires a SPA URL for browser seeding.');
+    if (!spaUrl) {
+      throw new Error('Missing PLAYWRIGHT_BASE_URL or BASE_URL. Global setup requires a SPA URL for browser seeding.');
     }
 
     console.log('[global-setup] API login target:', apiUrl);
-    console.log('[global-setup] SPA browser target:', playwrightBaseUrl);
+    console.log('[global-setup] SPA browser target:', spaUrl);
     const storagePath = await getAuthenticatedStorageState();
     console.log('[global-setup] Auth storage ready:', storagePath);
     console.log('[global-setup] Completed in ms:', Date.now() - startedAt);

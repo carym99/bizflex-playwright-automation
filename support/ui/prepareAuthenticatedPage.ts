@@ -18,6 +18,35 @@ async function waitForAccountOrLoginRoute(page: Page): Promise<void> {
     .catch(() => {});
 }
 
+async function attemptUiLoginRecovery(page: Page): Promise<boolean> {
+  const email = process.env.TEST_EMAIL;
+  const password = process.env.TEST_PASSWORD;
+  if (!email || !password) {
+    return false;
+  }
+
+  const emailInput = page
+    .locator('[data-testid="email"], [data-testid="email-input"], input[type="email"]')
+    .first();
+  const passwordInput = page
+    .locator('[data-testid="password"], [data-testid="password-input"], input[type="password"]')
+    .first();
+  const submit = page.getByRole('button', { name: /login|sign in/i }).first();
+
+  const hasLoginForm =
+    (await emailInput.isVisible().catch(() => false)) &&
+    (await passwordInput.isVisible().catch(() => false)) &&
+    (await submit.isVisible().catch(() => false));
+  if (!hasLoginForm) return false;
+
+  await emailInput.fill(email);
+  await passwordInput.fill(password);
+  await submit.click();
+  await page.waitForURL(/\/account/i, { timeout: 45_000 });
+  console.warn('[auth] Seeded session redirected to /login; recovered with UI login fallback');
+  return true;
+}
+
 /**
  * Standard entry for authenticated UI flows: land on account, clear interruptions, assert dashboard shell.
  * Always pass `testInfo` so an unexpected `/login` redirect attaches `auth-diagnostics.json` + screenshot.
@@ -37,7 +66,13 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
   await page.goto('/account', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('load');
   await waitForAccountOrLoginRoute(page);
-  await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: initial navigation');
+  if (/\/login/i.test(page.url())) {
+    const recovered = await attemptUiLoginRecovery(page);
+    if (!recovered) {
+      await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: initial navigation');
+    }
+  }
+  await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after recovery check');
 
   await handleSessionTimeout(page);
   await dismissCardModal(page);

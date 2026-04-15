@@ -14,7 +14,7 @@ const SESSION_SEED_FILENAME = 'authenticated-session-seed.json';
  * not the API host — otherwise injected tokens never apply in the browser.
  */
 function resolveUiBaseUrlForAuthStorage(): string {
-  const raw = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'https://bizflex-app.netlify.app/login';
+  const raw = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'https://bizflex-app.netlify.app';
   return raw.trim().replace(/\/$/, '');
 }
 
@@ -89,9 +89,13 @@ async function seedBrowserStorageAndSaveState(
     const context = await browser.newContext({ baseURL: spaOrigin });
     const page = await context.newPage();
     try {
-      const playwrightBaseUrl = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
-      await page.goto(playwrightBaseUrl, {
-        waitUntil: 'networkidle',
+      const rawBase = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
+      const resolvedBaseUrl = new URL(rawBase);
+      const spaOriginFromBase = resolvedBaseUrl.origin;
+      const initialPath = resolvedBaseUrl.pathname && resolvedBaseUrl.pathname !== '/' ? resolvedBaseUrl.pathname : '/';
+
+      await page.goto(new URL(initialPath, spaOriginFromBase).toString(), {
+        waitUntil: 'domcontentloaded',
       });
       const email = process.env.TEST_EMAIL;
       if (!email) {
@@ -135,8 +139,8 @@ async function seedBrowserStorageAndSaveState(
         throw new Error('sessionStorage.user was not set after auth seeding');
       }
 
-      await page.goto(`${playwrightBaseUrl}/account`, {
-        waitUntil: 'networkidle',
+      await page.goto(new URL('/account', spaOriginFromBase).toString(), {
+        waitUntil: 'domcontentloaded',
       });
       if (/\/login/i.test(page.url())) {
         await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check');
@@ -204,6 +208,13 @@ async function isAccessTokenAcceptedByApi(token: string): Promise<boolean> {
     if (res.status() === 404) {
       console.warn(
         `[auth-storage] Profile probe 404 at ${sessionPath} — treating token as valid only if JWT exp is in the future`
+      );
+      const expSec = decodeJwtExpSeconds(token);
+      return expSec !== null && expSec > nowSec + JWT_SKEW_SECONDS;
+    }
+    if (res.status() >= 500) {
+      console.warn(
+        `[auth-storage] Profile probe ${res.status()} at ${sessionPath} — backend unavailable, reusing non-expired JWT`
       );
       const expSec = decodeJwtExpSeconds(token);
       return expSec !== null && expSec > nowSec + JWT_SKEW_SECONDS;

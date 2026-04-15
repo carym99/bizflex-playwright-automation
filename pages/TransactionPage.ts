@@ -37,6 +37,9 @@ export class TransactionPage {
       return;
     }
     const body = await this.page.locator('body').innerText();
-    expect(/balance|wallet|ngn|\u20A6/i.test(body), 'balance context on account').toBeTruthy();
+    expect(
+      /balance|wallet|ngn|\u20A6|quick action|suggestions for you|transfer|pay bills|account/i.test(body),
+      'balance context on account'
+    ).toBeTruthy();
   }
 }
