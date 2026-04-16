@@ -12,6 +12,7 @@ import {
   getLoginPasswordInput,
   getLoginSubmitButton,
 } from '../../support/ui/loginHelpers';
+import { gotoWithRetry } from '../../support/ui/navigation';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -22,7 +23,7 @@ function loginButton(page: Page) {
 test.describe('@ui @auth User Login UI', () => {
   test('shows validation message for invalid email format', async ({ page }) => {
     test.setTimeout(60_000);
-    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });
     await assertLoginFormReady(page);
     const emailInput = getLoginEmailInput(page);
     const passwordInput = getLoginPasswordInput(page);
@@ -38,7 +39,7 @@ test.describe('@ui @auth User Login UI', () => {
   });
 
   test('shows validation for only password entered', async ({ page }) => {
-    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });
     await assertLoginFormReady(page);
     let loginPosts = 0;
     page.on('request', (request) => {
@@ -73,7 +74,7 @@ test.describe('@ui @auth User Login UI', () => {
       });
     });
 
-    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });
     await assertLoginFormReady(page);
     const suspendedEmail = process.env.SUSPENDED_USER_EMAIL || getUiEmail();
     await getLoginEmailInput(page).fill(suspendedEmail);
@@ -101,7 +102,7 @@ test.describe('@ui @auth User Login UI', () => {
       });
     });
 
-    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });
     await assertLoginFormReady(page);
     const mfaEmail = process.env.MFA_USER_EMAIL || getUiEmail();
     await getLoginEmailInput(page).fill(mfaEmail);

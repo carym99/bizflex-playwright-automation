@@ -7,6 +7,7 @@ import {
   getLoginPasswordInput,
   getLoginSubmitButton,
 } from '../support/ui/loginHelpers';
+import { gotoWithRetry } from '../support/ui/navigation';
 
 /**
  * Minimal UI login + verification — mirrors stable Cypress authSelectors.
@@ -17,7 +18,7 @@ export class LoginPage {
 
   /** ~20% UI check: authenticated session can load account shell. */
   async verifyLoggedIn(testInfo: TestInfo): Promise<void> {
-    await this.page.goto('/account', { waitUntil: 'domcontentloaded' });
+    await gotoWithRetry(this.page, '/account', { waitUntil: 'domcontentloaded' });
     await assertStillAuthenticated(this.page, testInfo, 'LoginPage.verifyLoggedIn');
     await ensureBizflexCardModalClosed(this.page);
     await expect(this.page).toHaveURL(/\/account/i, { timeout: 45_000 });
@@ -29,7 +30,7 @@ export class LoginPage {
    * Full browser login (no pre-seeded storage) — use in dedicated projects or before generateStorageState validation.
    */
   async uiLogin(email: string, password: string): Promise<void> {
-    await this.page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await gotoWithRetry(this.page, '/login', { waitUntil: 'domcontentloaded' });
     await assertLoginFormReady(this.page);
     const emailInput = getLoginEmailInput(this.page);
     const passwordInput = getLoginPasswordInput(this.page);

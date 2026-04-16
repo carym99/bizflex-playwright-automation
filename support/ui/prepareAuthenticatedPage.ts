@@ -5,6 +5,7 @@ import { dismissCookieBanner } from './dismissCookieBanner';
 import { handleSessionTimeout } from './handleSessionTimeout';
 import { waitForDashboardReadiness } from './dashboardReadiness';
 import { readAuthSessionSeed } from '../auth/storageState';
+import { gotoWithRetry } from './navigation';
 
 async function waitForAccountOrLoginRoute(page: Page): Promise<void> {
   await page
@@ -63,7 +64,7 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
     );
   }
 
-  await page.goto('/account', { waitUntil: 'domcontentloaded' });
+  await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('load');
   await waitForAccountOrLoginRoute(page);
   if (/\/login/i.test(page.url())) {
