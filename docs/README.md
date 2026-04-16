@@ -10,18 +10,24 @@ This folder documents the shared test standards for this Playwright project. The
 
 Workflow: `.github/workflows/playwright-lanes.yml`. Global setup seeds `storage/authenticated-user.json` via API login and a headless Chromium visit to the SPA.
 
-**Required for global auth setup** (Settings → Secrets and variables → Actions):
+### Required repository settings
 
-- `TEST_PASSWORD` (repository **secret**)
-- `TEST_EMAIL`: either a repository **secret** named `TEST_EMAIL`, **or** a repository **variable** named `TEST_EMAIL` (same name; the workflow prefers the secret when both are set)
+- **Secret:** `TEST_PASSWORD`
+- **Secret or Variable:** `TEST_EMAIL` (repository **secret** `TEST_EMAIL` is used first if set; otherwise repository **variable** `TEST_EMAIL`)
 
-**Recommended** (used by some specs; optional depending on coverage you run):
+### Where to configure
 
-- `API_URL` (defaults to `https://bizflex.onrender.com` in the workflow if unset)
+1. Open **Repository → Settings → Secrets and variables → Actions**
+2. Under **Secrets**, add `TEST_PASSWORD` (and optionally `TEST_EMAIL` if you do not use a variable for the email).
+3. Under **Variables**, add `TEST_EMAIL` if you prefer the login email as a non-secret variable.
+
+The verify step fails fast with separate error messages if `TEST_EMAIL` is missing entirely (neither secret nor variable) or if `TEST_PASSWORD` is missing.
+
+### Optional secrets / variables
+
+- `API_URL` (workflow defaults to `https://bizflex.onrender.com` if unset)
 - `PLAYWRIGHT_BASE_URL` (defaults to `https://bizflex-app.netlify.app` if unset)
-- `VALID_USER_EMAIL`, `VALID_USER_PASSWORD`, `UI_USER_EMAIL`, `UI_USER_PASSWORD`, `MFA_USER_EMAIL`, `MFA_USER_PASSWORD` as needed
-
-If `TEST_PASSWORD` is missing, or `TEST_EMAIL` is not set as either a secret or a repository variable, the workflow fails fast before `npm ci`. Wrong credentials show up as API or browser errors later in the job log.
+- `VALID_USER_EMAIL`, `VALID_USER_PASSWORD`, `UI_USER_EMAIL`, `UI_USER_PASSWORD`, `MFA_USER_EMAIL`, `MFA_USER_PASSWORD` as needed for specific specs
 
 ## Transfer API Environment Setup
 
