@@ -51,7 +51,8 @@ jobs:
           FAILED_LOGIN_BUDGET_MS: "7000"
         shell: bash
         run: |
-          set -euo pipefail
+          # Do not use `set -u` here: npm / Playwright child processes may reference unset env vars and exit non‑zero under nounset.
+          set -eo pipefail
           export API_URL="${API_URL:-https://bizflex.onrender.com}"
           export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
           npm run test:${{ matrix.lane }}
