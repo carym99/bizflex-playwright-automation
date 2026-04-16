@@ -29,30 +29,33 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Verify required credentials for Playwright (fail fast)
+        shell: bash
+        env:
+          TEST_EMAIL_SECRET: ${{ secrets.TEST_EMAIL }}
+          TEST_EMAIL_VAR: ${{ vars.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: |
+          export TEST_EMAIL="${TEST_EMAIL_SECRET:-${TEST_EMAIL_VAR}}"
+          if [[ -z "${TEST_EMAIL}" || -z "${TEST_PASSWORD}" ]]; then
+            echo "::error::Configure Actions: set secret TEST_PASSWORD, and set either secret TEST_EMAIL or variable TEST_EMAIL (Repository → Settings → Secrets and variables). See docs/README.md."
+            exit 1
+          fi
+          echo "Auth credentials for CI are present (values not logged)."
+
       - name: Install dependencies
         run: npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Verify required secrets for auth global setup
-        shell: bash
-        env:
-          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-        run: |
-          if [[ -z "${TEST_EMAIL}" || -z "${TEST_PASSWORD}" ]]; then
-            echo "::error::Configure Actions secrets TEST_EMAIL and TEST_PASSWORD (Repository settings → Secrets and variables → Actions). See docs/README.md."
-            exit 1
-          fi
-          echo "Required secrets TEST_EMAIL and TEST_PASSWORD are present (values not logged)."
-
       - name: Run lane
         env:
           CI: true
           API_URL: ${{ secrets.API_URL }}
           PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
-          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_EMAIL_SECRET: ${{ secrets.TEST_EMAIL }}
+          TEST_EMAIL_VAR: ${{ vars.TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
           VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
@@ -63,10 +66,12 @@ jobs:
           FAILED_LOGIN_BUDGET_MS: "7000"
         shell: bash
         run: |
-          # Do not use `set -u` here: npm / Playwright child processes may reference unset env vars and exit non‑zero under nounset.
-          set -eo pipefail
+          # Merge email from repository secret or variable; password must remain a secret.
+          export TEST_EMAIL="${TEST_EMAIL_SECRET:-${TEST_EMAIL_VAR}}"
+          export TEST_PASSWORD="${TEST_PASSWORD}"
           export API_URL="${API_URL:-https://bizflex.onrender.com}"
           export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
+          export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
           npm run test:${{ matrix.lane }}
 
       - name: Upload Playwright report

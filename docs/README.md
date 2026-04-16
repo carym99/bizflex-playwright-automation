@@ -10,10 +10,10 @@ This folder documents the shared test standards for this Playwright project. The
 
 Workflow: `.github/workflows/playwright-lanes.yml`. Global setup seeds `storage/authenticated-user.json` via API login and a headless Chromium visit to the SPA.
 
-**Required repository secrets** (Settings → Secrets and variables → Actions):
+**Required for global auth setup** (Settings → Secrets and variables → Actions):
 
-- `TEST_EMAIL`
-- `TEST_PASSWORD`
+- `TEST_PASSWORD` (repository **secret**)
+- `TEST_EMAIL`: either a repository **secret** named `TEST_EMAIL`, **or** a repository **variable** named `TEST_EMAIL` (same name; the workflow prefers the secret when both are set)
 
 **Recommended** (used by some specs; optional depending on coverage you run):
 
@@ -21,7 +21,7 @@ Workflow: `.github/workflows/playwright-lanes.yml`. Global setup seeds `storage/
 - `PLAYWRIGHT_BASE_URL` (defaults to `https://bizflex-app.netlify.app` if unset)
 - `VALID_USER_EMAIL`, `VALID_USER_PASSWORD`, `UI_USER_EMAIL`, `UI_USER_PASSWORD`, `MFA_USER_EMAIL`, `MFA_USER_PASSWORD` as needed
 
-If `TEST_EMAIL` / `TEST_PASSWORD` are missing, the auth storage step cannot run and Playwright lanes will fail.
+If `TEST_PASSWORD` is missing, or `TEST_EMAIL` is not set as either a secret or a repository variable, the workflow fails fast before `npm ci`. Wrong credentials show up as API or browser errors later in the job log.
 
 ## Transfer API Environment Setup
 
