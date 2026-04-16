@@ -35,6 +35,18 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Verify required secrets for auth global setup
+        shell: bash
+        env:
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: |
+          if [[ -z "${TEST_EMAIL}" || -z "${TEST_PASSWORD}" ]]; then
+            echo "::error::Configure Actions secrets TEST_EMAIL and TEST_PASSWORD (Repository settings → Secrets and variables → Actions). See docs/README.md."
+            exit 1
+          fi
+          echo "Required secrets TEST_EMAIL and TEST_PASSWORD are present (values not logged)."
+
       - name: Run lane
         env:
           CI: true

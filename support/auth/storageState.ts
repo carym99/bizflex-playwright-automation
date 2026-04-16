@@ -84,11 +84,17 @@ async function seedBrowserStorageAndSaveState(
   uiBaseUrl: string,
   loginResponse: LoginApiResponse
 ): Promise<void> {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({
+    args: process.env.CI ? ['--disable-dev-shm-usage'] : [],
+  });
   try {
     const spaOrigin = toSpaOrigin(uiBaseUrl);
     const context = await browser.newContext({ baseURL: spaOrigin });
     const page = await context.newPage();
+    if (process.env.CI) {
+      page.setDefaultNavigationTimeout(120_000);
+      page.setDefaultTimeout(60_000);
+    }
     try {
       const rawBase = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
       const resolvedBaseUrl = new URL(rawBase);
@@ -143,6 +149,12 @@ async function seedBrowserStorageAndSaveState(
       await gotoWithRetry(page, new URL('/account', spaOriginFromBase).toString(), {
         waitUntil: 'domcontentloaded',
       });
+      await page.waitForLoadState('load').catch(() => {});
+      try {
+        await page.waitForURL(/\/account/i, { timeout: process.env.CI ? 75_000 : 45_000 });
+      } catch {
+        // Client router may be slow; fall through to URL assertion below.
+      }
       if (/\/login/i.test(page.url())) {
         await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check');
         throw new Error('Seeded browser session redirected to /login during /account check');
@@ -296,12 +308,20 @@ async function regenerateStorage(outPath: string, uiBaseUrl: string): Promise<st
   const { email, password } = resolveCredentials();
   const ctx = await playwrightRequest.newContext();
   try {
-    const body = toLoginApiResponse(await loginByApi(ctx, email, password));
-    const token = extractTokenFromLoginBody(body);
-    if (!token) {
-      throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
+    const runSeed = async () => {
+      const body = toLoginApiResponse(await loginByApi(ctx, email, password));
+      const token = extractTokenFromLoginBody(body);
+      if (!token) {
+        throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
+      }
+      await seedBrowserStorageAndSaveState(outPath, uiBaseUrl, body);
+    };
+    try {
+      await runSeed();
+    } catch (seedErr) {
+      console.warn('[auth-storage] Browser seeding failed once; retrying after fresh API login', seedErr);
+      await runSeed();
     }
-    await seedBrowserStorageAndSaveState(outPath, uiBaseUrl, body);
     console.log('[auth-storage] New session generated:', outPath);
     return outPath;
   } finally {
