@@ -49,7 +49,12 @@ jobs:
           MFA_USER_EMAIL: ${{ secrets.MFA_USER_EMAIL }}
           MFA_USER_PASSWORD: ${{ secrets.MFA_USER_PASSWORD }}
           FAILED_LOGIN_BUDGET_MS: "7000"
-        run: npm run test:${{ matrix.lane }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export API_URL="${API_URL:-https://bizflex.onrender.com}"
+          export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
+          npm run test:${{ matrix.lane }}
 
       - name: Upload Playwright report
         if: always()

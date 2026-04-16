@@ -109,6 +109,29 @@ export class PaymentLinkPage {
     }
   }
 
+  /** Chakra portals (promos, confirmations) can sit above the page and intercept clicks. */
+  private async dismissChakraBlockingModalsIfPresent(): Promise<void> {
+    const modalContent = this.page.locator('.chakra-modal__content-container').first();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const visible = await modalContent.isVisible().catch(() => false);
+      if (!visible) return;
+
+      await this.page.keyboard.press('Escape').catch(() => {});
+      try {
+        await expect(modalContent).toBeHidden({ timeout: 2_500 });
+        return;
+      } catch {
+        const inDialog = this.page
+          .locator('[role="dialog"]')
+          .getByRole('button', { name: /Close|Got it|Maybe later|Dismiss/i })
+          .first();
+        if (await inDialog.isVisible().catch(() => false)) {
+          await inDialog.click({ force: true }).catch(() => {});
+        }
+      }
+    }
+  }
+
   async navigate(testInfo: TestInfo): Promise<void> {
     await this.page.goto('/payment-link', { waitUntil: 'domcontentloaded' });
     await assertStillAuthenticated(this.page, testInfo, 'PaymentLinkPage.navigate after goto /payment-link');
@@ -142,8 +165,11 @@ export class PaymentLinkPage {
 
   async openGenerateLinkModal(): Promise<void> {
     await this.dismissBlockingCardModalIfPresent();
+    await this.dismissChakraBlockingModalsIfPresent();
+    await ensureBizflexCardModalClosed(this.page);
     const createUniqueLinkButton = this.createUniqueLinkButton().first();
     await expect(createUniqueLinkButton).toBeVisible({ timeout: 20_000 });
+    await expect(createUniqueLinkButton).toBeEnabled({ timeout: 30_000 });
     console.log('Before click URL:', this.page.url());
     await createUniqueLinkButton.click();
     console.log('After click URL:', this.page.url());

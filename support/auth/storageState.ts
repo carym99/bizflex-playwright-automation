@@ -5,6 +5,7 @@ import { resolveApiUrl, extractTokenFromLoginBody, extractRefreshTokenFromLoginB
 import { isLikelyJwt } from '../../schemas/token.schema';
 import { logAuthDiagnostics } from './debugAuthState';
 import { loginByApi } from './loginByApi';
+import { gotoWithRetry } from '../ui/navigation';
 
 const STORAGE_FILENAME = 'authenticated-user.json';
 const SESSION_SEED_FILENAME = 'authenticated-session-seed.json';
@@ -94,7 +95,7 @@ async function seedBrowserStorageAndSaveState(
       const spaOriginFromBase = resolvedBaseUrl.origin;
       const initialPath = resolvedBaseUrl.pathname && resolvedBaseUrl.pathname !== '/' ? resolvedBaseUrl.pathname : '/';
 
-      await page.goto(new URL(initialPath, spaOriginFromBase).toString(), {
+      await gotoWithRetry(page, new URL(initialPath, spaOriginFromBase).toString(), {
         waitUntil: 'domcontentloaded',
       });
       const email = process.env.TEST_EMAIL;
@@ -139,7 +140,7 @@ async function seedBrowserStorageAndSaveState(
         throw new Error('sessionStorage.user was not set after auth seeding');
       }
 
-      await page.goto(new URL('/account', spaOriginFromBase).toString(), {
+      await gotoWithRetry(page, new URL('/account', spaOriginFromBase).toString(), {
         waitUntil: 'domcontentloaded',
       });
       if (/\/login/i.test(page.url())) {

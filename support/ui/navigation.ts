@@ -10,19 +10,29 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const defaultNavigationTimeoutMs = process.env.CI ? 90_000 : 45_000;
+
 /**
  * CI-safe goto helper: retries transient navigation failures before surfacing.
  */
 export async function gotoWithRetry(
   page: Page,
   url: string,
-  options: { waitUntil?: 'domcontentloaded' | 'load' | 'networkidle' } = {}
+  options: {
+    waitUntil?: 'domcontentloaded' | 'load' | 'networkidle';
+    /** Per-navigation attempt timeout (ms). Defaults to CI-safe budget. */
+    timeout?: number;
+  } = {}
 ): Promise<void> {
   const attempts = process.env.CI ? 3 : 2;
+  const timeout = options.timeout ?? defaultNavigationTimeoutMs;
   let lastError: unknown;
   for (let i = 1; i <= attempts; i++) {
     try {
-      await page.goto(url, { waitUntil: options.waitUntil ?? 'domcontentloaded' });
+      await page.goto(url, {
+        waitUntil: options.waitUntil ?? 'domcontentloaded',
+        timeout,
+      });
       return;
     } catch (err) {
       lastError = err;
