@@ -28,6 +28,9 @@ export async function gotoWithRetry(
   const timeout = options.timeout ?? defaultNavigationTimeoutMs;
   let lastError: unknown;
   for (let i = 1; i <= attempts; i++) {
+    if (page.isClosed()) {
+      throw new Error(`[nav] page is closed before goto ${url} (attempt ${i})`);
+    }
     try {
       await page.goto(url, {
         waitUntil: options.waitUntil ?? 'domcontentloaded',

@@ -30,16 +30,31 @@ export class LoginPage {
    * Full browser login (no pre-seeded storage) — use in dedicated projects or before generateStorageState validation.
    */
   async uiLogin(email: string, password: string): Promise<void> {
-    await gotoWithRetry(this.page, '/login', { waitUntil: 'domcontentloaded' });
+    const navTimeout = process.env.CI ? 120_000 : 60_000;
+    const accountTimeout = process.env.CI ? 90_000 : 45_000;
+    const submitEnableTimeout = process.env.CI ? 45_000 : 20_000;
+
+    await gotoWithRetry(this.page, '/login', {
+      waitUntil: process.env.CI ? 'networkidle' : 'domcontentloaded',
+      timeout: navTimeout,
+    });
+    await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+
     await assertLoginFormReady(this.page);
+
     const emailInput = getLoginEmailInput(this.page);
     const passwordInput = getLoginPasswordInput(this.page);
     const submitButton = getLoginSubmitButton(this.page);
+
+    await expect(emailInput).toBeEditable({ timeout: 15_000 });
+    await expect(passwordInput).toBeEditable({ timeout: 15_000 });
     await emailInput.fill(email);
     await passwordInput.fill(password);
-    await expect(submitButton).toBeEnabled();
+    await expect(submitButton).toBeEnabled({ timeout: submitEnableTimeout });
     await submitButton.click();
-    await expect(this.page).toHaveURL(/\/account/i, { timeout: 45_000 });
+
+    await expect(this.page).toHaveURL(/\/account/i, { timeout: accountTimeout });
+    await this.page.waitForLoadState('domcontentloaded').catch(() => {});
     await ensureBizflexCardModalClosed(this.page);
   }
 }

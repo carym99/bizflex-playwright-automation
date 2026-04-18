@@ -16,6 +16,8 @@ Supporting code (unchanged): `pages/`, `fixtures/`, `support/`, `storage/` (gene
 
 Optional env: **`AUTH_WORKER_STORAGE_COUNT`** (default **16**, max **32**) — number of worker-slot files if you run more parallel Playwright workers than the default.
 
+Auth storage generation (see `support/auth/storageState.ts`): **`AUTH_STORAGE_UI_ONLY=1`** forces UI login only (no token injection). In **CI**, token injection is **off** by default unless **`AUTH_ALLOW_TOKEN_INJECTION=1`**. **`AUTH_BROWSER_VALIDATE_PATH`** (default `/v1/users/profile`) — API path used with the browser’s bearer token to confirm the session before saving `storageState`.
+
 ## Tag conventions
 
 Use **exactly** these Playwright grep tags (match CI `matrix.lane` values):

@@ -1,12 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { chromium, request as playwrightRequest } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
 import { resolveApiUrl, extractTokenFromLoginBody, extractRefreshTokenFromLoginBody } from '../../utils/api';
 import { isLikelyJwt } from '../../schemas/token.schema';
 import { logAuthDiagnostics } from './debugAuthState';
 import { buildBrowserAuthSeed, loginByApi } from './loginByApi';
 import { gotoWithRetry } from '../ui/navigation';
 import { LoginPage } from '../../pages/LoginPage';
+import { disposeContext, isAuthenticated, throwIfPageClosed } from './browserAuthSession';
+
+export { isAuthenticated, throwIfPageClosed } from './browserAuthSession';
 
 const STORAGE_FILENAME = 'authenticated-user.json';
 const SESSION_SEED_FILENAME = 'authenticated-session-seed.json';
@@ -76,127 +80,183 @@ export function readAuthSessionSeed(): AuthSessionSeed | null {
   }
 }
 
-async function seedBrowserStorageAndSaveState(
+/**
+ * When true, first auth attempt injects API tokens + navigates to /account.
+ * Default: enabled locally, disabled in CI (SPA often rejects injection → 401 storms).
+ * Force on in CI: AUTH_ALLOW_TOKEN_INJECTION=1. Force UI-only everywhere: AUTH_STORAGE_UI_ONLY=1.
+ */
+function useTokenInjectionAttempt(): boolean {
+  if (process.env.AUTH_STORAGE_UI_ONLY === '1') return false;
+  if (process.env.AUTH_ALLOW_TOKEN_INJECTION === '1') return true;
+  return process.env.CI !== 'true';
+}
+
+async function injectTokensAndNavigateToAccount(
+  page: Page,
+  spaOriginFromBase: string,
+  resolvedBaseUrl: URL,
+  loginResponse: LoginApiResponse,
+  email: string
+): Promise<void> {
+  throwIfPageClosed(page, 'injectTokens:start');
+
+  const accessToken = extractTokenFromLoginBody(loginResponse);
+  if (!accessToken) {
+    throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
+  }
+  const refreshToken = extractRefreshTokenFromLoginBody(loginResponse) ?? '';
+  const browserSeed = buildBrowserAuthSeed(loginResponse);
+
+  const initialPath = resolvedBaseUrl.pathname && resolvedBaseUrl.pathname !== '/' ? resolvedBaseUrl.pathname : '/';
+  await gotoWithRetry(page, new URL(initialPath, spaOriginFromBase).toString(), {
+    waitUntil: 'domcontentloaded',
+  });
+  throwIfPageClosed(page, 'injectTokens:after initial goto');
+
+  await page.evaluate(
+    ({ loginResponse: lr, email: em, browserSeed: seed }) => {
+      const typedResponse = lr as { accessToken?: unknown; refreshToken?: unknown };
+      const access = typeof typedResponse.accessToken === 'string' ? typedResponse.accessToken : '';
+      const refresh = typeof typedResponse.refreshToken === 'string' ? typedResponse.refreshToken : '';
+
+      localStorage.setItem('token', access);
+      localStorage.setItem('accessToken', access);
+      localStorage.setItem('authToken', access);
+      localStorage.setItem('refreshToken', refresh);
+      if (seed.userJson) {
+        localStorage.setItem('user', seed.userJson);
+      }
+
+      sessionStorage.setItem('user', JSON.stringify(lr));
+      sessionStorage.setItem('email', em);
+    },
+    {
+      loginResponse: { ...loginResponse, accessToken, refreshToken },
+      email,
+      browserSeed: {
+        userJson:
+          browserSeed.user !== null && browserSeed.user !== undefined
+            ? JSON.stringify(browserSeed.user)
+            : null,
+      },
+    }
+  );
+
+  throwIfPageClosed(page, 'injectTokens:after evaluate');
+
+  await gotoWithRetry(page, new URL('/', spaOriginFromBase).toString(), {
+    waitUntil: 'domcontentloaded',
+  });
+  await gotoWithRetry(page, new URL('/account', spaOriginFromBase).toString(), {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForLoadState('load').catch(() => {});
+  throwIfPageClosed(page, 'injectTokens:after /account goto');
+}
+
+/**
+ * Each attempt uses a brand-new browser context + page. Never retries navigation on a closed page.
+ * Saves `storageState` only after `isAuthenticated` succeeds.
+ */
+async function generateAuthenticatedStorageInBrowser(
   outPath: string,
   uiBaseUrl: string,
-  loginResponse: LoginApiResponse
+  loginResponse: LoginApiResponse,
+  email: string,
+  password: string
 ): Promise<void> {
+  const rawBase = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
+  const resolvedBaseUrl = new URL(rawBase);
+  const spaOriginFromBase = resolvedBaseUrl.origin;
+  const tryInjectionFirst = useTokenInjectionAttempt();
+
   const browser = await chromium.launch({
     args: process.env.CI ? ['--disable-dev-shm-usage'] : [],
   });
+
   try {
-    const rawBase = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
-    const resolvedBaseUrl = new URL(rawBase);
-    /** Single origin for context + navigations so localStorage applies to the same host the SPA uses. */
-    const spaOriginFromBase = resolvedBaseUrl.origin;
-    const context = await browser.newContext({ baseURL: spaOriginFromBase });
-    const page = await context.newPage();
-    if (process.env.CI) {
-      page.setDefaultNavigationTimeout(120_000);
-      page.setDefaultTimeout(60_000);
-    }
-    try {
-      const initialPath = resolvedBaseUrl.pathname && resolvedBaseUrl.pathname !== '/' ? resolvedBaseUrl.pathname : '/';
-
-      await gotoWithRetry(page, new URL(initialPath, spaOriginFromBase).toString(), {
-        waitUntil: 'domcontentloaded',
-      });
-      const email = process.env.TEST_EMAIL;
-      if (!email) {
-        throw new Error('[auth-storage] TEST_EMAIL is required to seed sessionStorage.email');
-      }
-
-      const accessToken = extractTokenFromLoginBody(loginResponse);
-      if (!accessToken) {
-        throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
-      }
-      const refreshToken = extractRefreshTokenFromLoginBody(loginResponse) ?? '';
-      const browserSeed = buildBrowserAuthSeed(loginResponse);
-
-      await page.evaluate(
-        ({ loginResponse, email, browserSeed: seed }) => {
-          const typedResponse = loginResponse as { accessToken?: unknown; refreshToken?: unknown };
-          const access = typeof typedResponse.accessToken === 'string' ? typedResponse.accessToken : '';
-          const refresh = typeof typedResponse.refreshToken === 'string' ? typedResponse.refreshToken : '';
-
-          localStorage.setItem('token', access);
-          localStorage.setItem('accessToken', access);
-          localStorage.setItem('authToken', access);
-          localStorage.setItem('refreshToken', refresh);
-          if (seed.userJson) {
-            localStorage.setItem('user', seed.userJson);
-          }
-
-          sessionStorage.setItem('user', JSON.stringify(loginResponse));
-          sessionStorage.setItem('email', email);
-        },
-        {
-          loginResponse: { ...loginResponse, accessToken, refreshToken },
-          email,
-          browserSeed: {
-            userJson:
-              browserSeed.user !== null && browserSeed.user !== undefined
-                ? JSON.stringify(browserSeed.user)
-                : null,
-          },
-        }
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const pathLabel = tryInjectionFirst && attempt === 1 ? 'token-injection' : 'ui-login';
+      console.log(
+        `[auth-storage] browser auth attempt ${attempt}/2 path=${pathLabel} spaOrigin=${spaOriginFromBase} tryInjectionFirst=${tryInjectionFirst}`
       );
 
-      const debugState = await page.evaluate(() => ({
-        localStorage: { ...localStorage },
-        sessionStorage: { ...sessionStorage },
-      }));
+      let context: BrowserContext | undefined;
+      let page: Page | undefined;
 
-      console.log('[auth-storage] post-seed browser state', JSON.stringify(debugState, null, 2));
-
-      if (!debugState.sessionStorage.user) {
-        throw new Error('sessionStorage.user was not set after auth seeding');
-      }
-      if (!debugState.localStorage.accessToken || !debugState.localStorage.token) {
-        throw new Error('[auth-storage] accessToken/token missing from localStorage after seeding');
-      }
-
-      const accountUrl = new URL('/account', spaOriginFromBase).toString();
-      const accountWaitMs = process.env.CI ? 120_000 : 60_000;
-
-      await gotoWithRetry(page, new URL('/', spaOriginFromBase).toString(), {
-        waitUntil: 'domcontentloaded',
-      });
-      await gotoWithRetry(page, accountUrl, {
-        waitUntil: 'domcontentloaded',
-      });
-      await page.waitForLoadState('load').catch(() => {});
       try {
-        await page.waitForURL(/\/account/i, { timeout: accountWaitMs });
-      } catch {
-        // Client router may be slow; fall through to URL assertion below.
-      }
-      if (/\/login/i.test(page.url())) {
-        const password = process.env.TEST_PASSWORD;
-        if (!password) {
-          await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check');
-          throw new Error(
-            'Seeded browser session redirected to /login during /account check. Set TEST_PASSWORD to enable UI login fallback in global setup.'
-          );
+        context = await browser.newContext({ baseURL: spaOriginFromBase });
+        page = await context.newPage();
+        if (process.env.CI) {
+          page.setDefaultNavigationTimeout(120_000);
+          page.setDefaultTimeout(60_000);
         }
-        console.warn(
-          '[auth-storage] Injected API tokens were not accepted by the SPA; completing session via UI login (same credentials)'
+
+        if (tryInjectionFirst && attempt === 1) {
+          await injectTokensAndNavigateToAccount(page, spaOriginFromBase, resolvedBaseUrl, loginResponse, email);
+          const ok = await isAuthenticated(page);
+          console.log(
+            `[auth-storage] attempt 1 post-injection url=${page.url()} isAuthenticated=${ok} tokenPresent=${Boolean(
+              await page.evaluate(() => localStorage.getItem('accessToken'))
+            )}`
+          );
+          if (!ok) {
+            throw new Error(
+              '[auth-storage] Token injection did not yield a session accepted by the SPA + API (isAuthenticated=false)'
+            );
+          }
+        } else {
+          const loginPage = new LoginPage(page);
+          console.log(`[auth-storage] attempt ${attempt} using UI login (fresh context, no closed-page reuse)`);
+          await loginPage.uiLogin(email, password);
+          throwIfPageClosed(page, 'after uiLogin');
+          const ok = await isAuthenticated(page);
+          console.log(
+            `[auth-storage] attempt ${attempt} post-ui-login url=${page.url()} isAuthenticated=${ok} tokenPresent=${Boolean(
+              await page.evaluate(() => localStorage.getItem('accessToken'))
+            )}`
+          );
+          if (!ok) {
+            await logAuthDiagnostics(page, `generateAuthenticatedStorage attempt ${attempt} UI path`);
+            throw new Error('[auth-storage] UI login did not pass isAuthenticated (API or /login check)');
+          }
+        }
+
+        const accessFromStorage =
+          (await page.evaluate(() => localStorage.getItem('accessToken'))) ?? extractTokenFromLoginBody(loginResponse);
+        const refreshFromStorage =
+          (await page.evaluate(() => localStorage.getItem('refreshToken'))) ??
+          extractRefreshTokenFromLoginBody(loginResponse) ??
+          '';
+        if (!accessFromStorage) {
+          throw new Error('[auth-storage] accessToken missing in localStorage after successful auth');
+        }
+
+        await persistAuthSessionSeed(
+          { ...loginResponse, accessToken: accessFromStorage, refreshToken: refreshFromStorage },
+          email
         );
-        const loginPage = new LoginPage(page);
-        await loginPage.uiLogin(email, password);
+        await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
+        await context.storageState({ path: outPath });
+        console.log(`[auth-storage] Saved verified storageState → ${outPath} (path=${pathLabel})`);
+        await page.close().catch(() => {});
+        await disposeContext(context);
+        return;
+      } catch (err) {
+        console.warn(`[auth-storage] attempt ${attempt} failed:`, err instanceof Error ? err.message : String(err));
+        if (page && !page.isClosed()) {
+          try {
+            await logAuthDiagnostics(page, `generateAuthenticatedStorage attempt ${attempt} failure`);
+          } catch {
+            // ignore diagnostics failures on torn-down pages
+          }
+        }
+        await page?.close().catch(() => {});
+        await disposeContext(context);
+        if (attempt === 2) {
+          throw err;
+        }
       }
-
-      if (/\/login/i.test(page.url())) {
-        await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check after UI fallback');
-        throw new Error('Seeded browser session still on /login after UI login fallback');
-      }
-
-      await persistAuthSessionSeed({ ...loginResponse, accessToken, refreshToken }, email);
-      await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
-      await context.storageState({ path: outPath });
-    } finally {
-      await page.close();
-      await context.close();
     }
   } finally {
     await browser.close();
@@ -386,25 +446,26 @@ async function regenerateStorage(outPath: string, uiBaseUrl: string): Promise<st
   const { email, password } = resolveCredentials();
   const ctx = await playwrightRequest.newContext();
   try {
-    const runSeed = async () => {
+    const runOnce = async () => {
       const body = toLoginApiResponse(await loginByApi(ctx, email, password));
       const token = extractTokenFromLoginBody(body);
       if (!token) {
         throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
       }
-      await seedBrowserStorageAndSaveState(outPath, uiBaseUrl, body);
+      await generateAuthenticatedStorageInBrowser(outPath, uiBaseUrl, body, email, password);
     };
+
     try {
-      await runSeed();
+      await runOnce();
     } catch (seedErr) {
-      console.warn('[auth-storage] Browser seeding failed once; retrying after fresh API login', seedErr);
+      console.warn('[auth-storage] Full browser auth generation failed once; fresh API login then retry', seedErr);
       const delayMs = Number(process.env.AUTH_SEED_RETRY_DELAY_MS);
       if (Number.isFinite(delayMs) && delayMs > 0) {
         await new Promise((r) => setTimeout(r, delayMs));
       } else if (process.env.CI) {
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 2000));
       }
-      await runSeed();
+      await runOnce();
     }
     console.log('[auth-storage] New session generated:', outPath);
     return outPath;

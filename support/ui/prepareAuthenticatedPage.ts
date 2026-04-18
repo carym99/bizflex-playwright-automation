@@ -72,7 +72,9 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
   await installAuthSessionSeedInitScript(page);
 
   await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
-  await page.waitForLoadState('load');
+  await page
+    .waitForLoadState('load', { timeout: process.env.CI ? 90_000 : 35_000 })
+    .catch(() => {});
   await waitForAccountOrLoginRoute(page);
   if (/\/login/i.test(page.url())) {
     const recovered = await attemptUiLoginRecovery(page);

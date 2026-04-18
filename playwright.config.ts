@@ -6,8 +6,8 @@ import { getAuthenticatedStorageStatePath } from './support/auth/storageState';
 
 /**
  * Auth for authenticated UI:
- * - `tests/setup/auth.setup.ts` runs first (project `setup`) and refreshes `storage/authenticated-user.json`,
- *   then clones it to `authenticated-user-worker-*.json` for parallel-safe contexts.
+ * - `tests/setup/auth.setup.ts` runs first (project `setup`, `workers: 1`) and refreshes `storage/authenticated-user.json`,
+ *   then clones it to `authenticated-user-worker-*.json`. Storage generation is UI-first in CI (see `AUTH_ALLOW_TOKEN_INJECTION`).
  * - `chromium` loads canonical `storage/authenticated-user.json` for the default `page`; specs using
  *   `tests/shared/fixtures/auth.fixture.ts` use per-worker JSON files (`AUTH_WORKER_STORAGE_COUNT`, default 16).
  *
@@ -75,6 +75,11 @@ export default defineConfig({
     {
       name: 'setup',
       testMatch: '**/setup/auth.setup.ts',
+      workers: 1,
+      use: {
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
     },
     {
       name: 'api',
