@@ -208,6 +208,53 @@ export function getAuthenticatedStorageStatePath(): string {
   return path.join(__dirname, '..', '..', 'storage', STORAGE_FILENAME);
 }
 
+/**
+ * How many `authenticated-user-worker-N.json` clones to maintain (default 16, max 32).
+ * Set `AUTH_WORKER_STORAGE_COUNT` if you run more parallel workers than the default.
+ */
+export function getMaxAuthWorkerStorageSlots(): number {
+  const raw = process.env.AUTH_WORKER_STORAGE_COUNT;
+  const n = raw ? Number(raw) : NaN;
+  if (Number.isFinite(n) && n > 0) {
+    return Math.min(32, Math.floor(n));
+  }
+  return 16;
+}
+
+/**
+ * Path to `storage/authenticated-user-worker-{slot}.json` for Playwright worker isolation.
+ * `parallelIndex` is 0-based (`testInfo.parallelIndex`); filenames use 1-based slot numbers.
+ * If `parallelIndex` exceeds the configured slot count, indices wrap with `%`.
+ */
+export function getAuthenticatedStorageStatePathForWorker(parallelIndex: number): string {
+  const max = getMaxAuthWorkerStorageSlots();
+  const slot = max > 0 ? Math.floor(parallelIndex) % max : 0;
+  const oneBased = slot + 1;
+  const dir = path.dirname(getAuthenticatedStorageStatePath());
+  return path.join(dir, `authenticated-user-worker-${oneBased}.json`);
+}
+
+/** Copy verified canonical `authenticated-user.json` into every worker slot (`1..max`). */
+export async function duplicateCanonicalAuthStorageToWorkerFiles(maxSlots?: number): Promise<void> {
+  const canonical = getAuthenticatedStorageStatePath();
+  const max = maxSlots ?? getMaxAuthWorkerStorageSlots();
+  const buf = await fs.promises.readFile(canonical, 'utf8');
+  const dir = path.dirname(canonical);
+  await fs.promises.mkdir(dir, { recursive: true });
+  for (let i = 1; i <= max; i++) {
+    const dest = path.join(dir, `authenticated-user-worker-${i}.json`);
+    await fs.promises.writeFile(dest, buf, 'utf8');
+  }
+  console.log(`[auth-storage] Duplicated canonical → ${max} worker storage file(s)`);
+}
+
+/** Copy canonical into the worker slot derived from `parallelIndex` (after regenerating auth). */
+export async function duplicateCanonicalToWorkerSlot(parallelIndex: number): Promise<void> {
+  const canonical = getAuthenticatedStorageStatePath();
+  const dest = getAuthenticatedStorageStatePathForWorker(parallelIndex);
+  await fs.promises.copyFile(canonical, dest);
+}
+
 type StorageStateFile = {
   origins?: Array<{
     localStorage?: Array<{ name: string; value: string }>;

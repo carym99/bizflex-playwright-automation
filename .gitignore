@@ -12,4 +12,4 @@ playwright/.cache/
 
 storage/*.json
 storage/**/*.json
-playwright/.auth/user.json
+playwright/.auth/

@@ -12,7 +12,9 @@ tests/
   regression/   Broader API and UI coverage, edge cases, long flows
 ```
 
-Supporting code (unchanged): `pages/`, `fixtures/`, `support/`, `storage/` (generated `authenticated-user.json` from global setup).
+Supporting code (unchanged): `pages/`, `fixtures/`, `support/`, `storage/` (generated `authenticated-user.json` plus `authenticated-user-worker-*.json` clones after setup).
+
+Optional env: **`AUTH_WORKER_STORAGE_COUNT`** (default **16**, max **32**) — number of worker-slot files if you run more parallel Playwright workers than the default.
 
 ## Tag conventions
 
@@ -65,9 +67,9 @@ With `matrix.lane` in `smoke`, `auth`, `api-auth`, `regression`, the effective g
 
 | Project             | Purpose |
 |---------------------|---------|
-| `setup`             | `tests/setup/auth.setup.ts` — seeds auth once per run; copies to `playwright/.auth/user.json` |
+| `setup`             | `tests/setup/auth.setup.ts` — refreshes and verifies `storage/authenticated-user.json` |
 | `api`               | `tests/api-auth/**` and `tests/regression/**/*.api.spec.ts` — uses `API_URL` as `baseURL` (`request` only) |
-| `chromium`          | `tests/smoke/**` and `tests/regression/**` except `*.api.spec.ts` — depends on `setup`; SPA `baseURL` + `playwright/.auth/user.json` |
+| `chromium`          | `tests/smoke/**` and `tests/regression/**` except `*.api.spec.ts` — depends on `setup`; SPA `baseURL` + `storage/authenticated-user.json` |
 | `ui-login`          | `tests/auth/**` — SPA `baseURL` + empty `storageState` |
 
 `playwright test` without `--project` runs all projects. Lane scripts use `--grep` only so each job still executes the right **projects** for matching tests.

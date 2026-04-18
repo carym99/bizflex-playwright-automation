@@ -2,11 +2,14 @@ import { defineConfig, devices, type ReporterDescription } from '@playwright/tes
 import { config as loadEnv } from 'dotenv';
 import * as path from 'path';
 import * as os from 'os';
+import { getAuthenticatedStorageStatePath } from './support/auth/storageState';
 
 /**
  * Auth for authenticated UI:
- * - `tests/setup/auth.setup.ts` runs first (project `setup`) and copies seeded storage to `playwright/.auth/user.json`.
- * - `chromium` project depends on `setup` and loads that file (explicit in reports vs only globalSetup).
+ * - `tests/setup/auth.setup.ts` runs first (project `setup`) and refreshes `storage/authenticated-user.json`,
+ *   then clones it to `authenticated-user-worker-*.json` for parallel-safe contexts.
+ * - `chromium` loads canonical `storage/authenticated-user.json` for the default `page`; specs using
+ *   `tests/shared/fixtures/auth.fixture.ts` use per-worker JSON files (`AUTH_WORKER_STORAGE_COUNT`, default 16).
  *
  * API tests use `APIRequestContext` (no browser storage). Login UI uses `ui-login` with empty storage.
  *
@@ -15,8 +18,7 @@ import * as os from 'os';
 loadEnv({ path: path.join(__dirname, '.env.local') });
 loadEnv({ path: path.join(__dirname, '.env') });
 
-/** Canonical path used by setup project after `getAuthenticatedStorageState()` runs. */
-const playwrightAuthState = path.join(__dirname, 'playwright', '.auth', 'user.json');
+const authenticatedUserStorage = getAuthenticatedStorageStatePath();
 /** Fresh browser profile (no saved auth) for login UI specs */
 const emptyStorageState = { cookies: [], origins: [] };
 
@@ -25,8 +27,11 @@ const uiBaseURL = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'ht
 
 const ciWorkers = (): number | undefined => {
   if (!process.env.CI) return undefined;
-  const fromEnv = Number(process.env.PW_WORKERS);
-  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  const raw = process.env.PW_WORKERS;
+  if (raw !== undefined && raw !== '') {
+    const fromEnv = Number(raw);
+    if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  }
   const half = Math.max(1, Math.floor(os.cpus().length / 2));
   return Math.min(4, Math.max(2, half));
 };
@@ -87,7 +92,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         baseURL: uiBaseURL,
-        storageState: playwrightAuthState,
+        storageState: authenticatedUserStorage,
       },
     },
     {

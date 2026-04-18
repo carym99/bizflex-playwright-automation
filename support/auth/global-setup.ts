@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { config as loadEnv } from 'dotenv';
-import { getAuthenticatedStorageState } from './storageState';
+import { duplicateCanonicalAuthStorageToWorkerFiles, getAuthenticatedStorageState } from './storageState';
 
 loadEnv({ path: path.join(__dirname, '..', '..', '.env.local') });
 loadEnv({ path: path.join(__dirname, '..', '..', '.env') });
@@ -28,6 +28,7 @@ export default async function globalSetup(): Promise<void> {
     console.log('[global-setup] API login target:', apiUrl);
     console.log('[global-setup] SPA browser target:', spaUrl);
     const storagePath = await getAuthenticatedStorageState();
+    await duplicateCanonicalAuthStorageToWorkerFiles();
     console.log('[global-setup] Auth storage ready:', storagePath);
     console.log('[global-setup] Completed in ms:', Date.now() - startedAt);
   } catch (err) {

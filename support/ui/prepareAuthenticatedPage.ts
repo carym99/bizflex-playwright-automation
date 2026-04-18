@@ -1,11 +1,27 @@
 import { type Page, type TestInfo } from '@playwright/test';
-import { failIfLoginRedirect } from './assertStillAuthenticated';
+import { assertAccessTokenPresent, failIfLoginRedirect } from './assertStillAuthenticated';
 import { dismissCardModal } from './dismissCardModal';
 import { dismissCookieBanner } from './dismissCookieBanner';
 import { handleSessionTimeout } from './handleSessionTimeout';
 import { waitForDashboardReadiness } from './dashboardReadiness';
 import { readAuthSessionSeed } from '../auth/storageState';
 import { gotoWithRetry } from './navigation';
+
+/**
+ * Ensures `sessionStorage` matches the API-written seed file before the first navigation.
+ * Playwright `storageState` persists cookies/localStorage origins but not sessionStorage.
+ */
+export async function installAuthSessionSeedInitScript(page: Page): Promise<void> {
+  const sessionSeed = readAuthSessionSeed();
+  if (!sessionSeed) return;
+  await page.addInitScript(
+    ({ user, email }) => {
+      window.sessionStorage.setItem('user', JSON.stringify(user));
+      window.sessionStorage.setItem('email', email);
+    },
+    { user: sessionSeed.user, email: sessionSeed.email }
+  );
+}
 
 async function waitForAccountOrLoginRoute(page: Page): Promise<void> {
   await page
@@ -53,16 +69,7 @@ async function attemptUiLoginRecovery(page: Page): Promise<boolean> {
  * Always pass `testInfo` so an unexpected `/login` redirect attaches `auth-diagnostics.json` + screenshot.
  */
 export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): Promise<void> {
-  const sessionSeed = readAuthSessionSeed();
-  if (sessionSeed) {
-    await page.addInitScript(
-      ({ user, email }) => {
-        window.sessionStorage.setItem('user', JSON.stringify(user));
-        window.sessionStorage.setItem('email', email);
-      },
-      { user: sessionSeed.user, email: sessionSeed.email }
-    );
-  }
+  await installAuthSessionSeedInitScript(page);
 
   await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('load');
@@ -81,4 +88,5 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
 
   await waitForDashboardReadiness(page);
   await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after dashboard wait');
+  await assertAccessTokenPresent(page, testInfo, 'prepareAuthenticatedPage: after dashboard wait');
 }

@@ -2,7 +2,8 @@
  * Live Netlify payment-link flow: single smoke happy path (create → publish → list).
  * Below-minimum edge case lives in `tests/regression/payment-link.publish-below-minimum.ui.spec.ts`.
  */
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { test, expect } from '../shared/fixtures/auth.fixture';
+import type { Page, TestInfo } from '@playwright/test';
 import { PaymentLinkPage, type FillGenerateLinkFormParams } from '../../pages/PaymentLinkPage';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
@@ -35,20 +36,20 @@ async function expectLinkNameVisibleWithArtifacts(page: Page, testInfo: TestInfo
 }
 
 test.describe('@smoke Payment link create and verify', () => {
-  test('authenticated user can create and verify a payment link', async ({ page }, testInfo) => {
+  test('authenticated user can create and verify a payment link', async ({ authenticatedPage }, testInfo) => {
     test.setTimeout(120_000);
     const linkName = buildPaymentLinkName();
     const description = 'Playwright automated payment link';
 
-    await test.step('Prepare authenticated session', async () => {
-      await prepareAuthenticatedPage(page, testInfo);
+    await test.step('Stabilize dashboard (dismiss modals) then keep session', async () => {
+      await prepareAuthenticatedPage(authenticatedPage, testInfo);
     });
 
-    const paymentLinkPage = new PaymentLinkPage(page);
+    const paymentLinkPage = new PaymentLinkPage(authenticatedPage);
 
     await test.step('Open payment link workspace', async () => {
       await paymentLinkPage.navigate(testInfo);
-      await assertStillAuthenticated(page, testInfo, 'after navigating to payment link page');
+      await assertStillAuthenticated(authenticatedPage, testInfo, 'after navigating to payment link page');
     });
 
     await test.step('Create and publish link', async () => {
@@ -65,20 +66,20 @@ test.describe('@smoke Payment link create and verify', () => {
         fillParams.email = process.env.TEST_EMAIL;
       }
       await paymentLinkPage.fillGenerateLinkForm(fillParams);
-      await expect(page.getByRole('button', { name: /Publish Link/i })).toBeEnabled();
+      await expect(authenticatedPage.getByRole('button', { name: /Publish Link/i })).toBeEnabled();
       await paymentLinkPage.publishPaymentLink();
       await paymentLinkPage.expectPaymentLinkGeneratedSuccessfully();
     });
 
     await test.step('Close success and verify list', async () => {
       await paymentLinkPage.closeSuccessModal();
-      await assertStillAuthenticated(page, testInfo, 'after closing success modal');
-      await expect(page).toHaveURL(/payment-link/i);
+      await assertStillAuthenticated(authenticatedPage, testInfo, 'after closing success modal');
+      await expect(authenticatedPage).toHaveURL(/payment-link/i);
       await paymentLinkPage.clickViewPaymentLinks();
-      await assertStillAuthenticated(page, testInfo, 'after View Payment Links navigation');
-      await expect(page).not.toHaveURL(/\/payment-link\/?$/i);
-      await expectLinkNameVisibleWithArtifacts(page, testInfo, linkName);
-      await assertStillAuthenticated(page, testInfo, 'after list verification');
+      await assertStillAuthenticated(authenticatedPage, testInfo, 'after View Payment Links navigation');
+      await expect(authenticatedPage).not.toHaveURL(/\/payment-link\/?$/i);
+      await expectLinkNameVisibleWithArtifacts(authenticatedPage, testInfo, linkName);
+      await assertStillAuthenticated(authenticatedPage, testInfo, 'after list verification');
     });
   });
 });

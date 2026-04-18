@@ -3,6 +3,46 @@ import { attachAuthFailureArtifacts, logAuthDiagnostics } from '../auth/debugAut
 import { handleSessionTimeout } from './handleSessionTimeout';
 
 /**
+ * After navigation, confirm a bearer-like token is still in `localStorage` (SPA auth).
+ * Call after `failIfLoginRedirect` when the URL is not `/login`.
+ */
+export async function assertAccessTokenPresent(
+  page: Page,
+  testInfo: TestInfo | undefined,
+  phase: string
+): Promise<void> {
+  if (/\/login/i.test(page.url())) {
+    return;
+  }
+
+  const token = await page.evaluate(() => {
+    return (
+      window.localStorage.getItem('accessToken') ??
+      window.localStorage.getItem('token') ??
+      window.localStorage.getItem('authToken')
+    );
+  });
+
+  if (process.env.CI) {
+    console.log(
+      `[auth] ${phase}: url=${page.url()} accessTokenPresent=${Boolean(token && token.length > 0)}`
+    );
+  }
+
+  if (token && token.length > 0) {
+    return;
+  }
+
+  if (testInfo) {
+    await attachAuthFailureArtifacts(page, testInfo, `${phase}-missing-access-token`);
+  } else {
+    await logAuthDiagnostics(page, `${phase}-missing-access-token`);
+  }
+
+  throw new Error(`Session invalid: missing accessToken (or token/authToken) in localStorage — ${phase}`);
+}
+
+/**
  * If the app redirected to `/login`, attach diagnostics (when `testInfo` is set), log URL / cookies / storage, and throw.
  * Used by `prepareAuthenticatedPage` and by specs after navigations that could drop session.
  */
@@ -48,4 +88,5 @@ export async function assertStillAuthenticated(
     await handleSessionTimeout(page);
   }
   await failIfLoginRedirect(page, testInfo, context);
+  await assertAccessTokenPresent(page, testInfo, context);
 }

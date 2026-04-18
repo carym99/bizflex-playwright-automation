@@ -1,5 +1,6 @@
 import { type Page, type TestInfo, type Locator, expect } from '@playwright/test';
 import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
+import { logAuthDiagnostics } from '../support/auth/debugAuthState';
 import { clickWithScrollThenForceFallback } from '../support/ui/clickPreferringActionability';
 import { paymentLinkSelectors as s } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
@@ -136,7 +137,41 @@ export class PaymentLinkPage {
   }
 
   async navigate(testInfo: TestInfo): Promise<void> {
-    await this.page.goto('/payment-link', { waitUntil: 'domcontentloaded' });
+    const logNav = (label: string) => {
+      const url = this.page.url();
+      console.log(`[PaymentLinkPage.navigate] ${label}: ${url}`);
+    };
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await this.page.goto('/payment-link', { waitUntil: 'domcontentloaded' });
+      logNav(`after goto /payment-link (attempt ${attempt})`);
+
+      if (/\/login/i.test(this.page.url())) {
+        if (process.env.CI) {
+          await logAuthDiagnostics(this.page, `PaymentLinkPage.navigate login redirect attempt ${attempt}`);
+        }
+        await testInfo
+          .attach(`payment-link-nav-unexpected-login-${attempt}.png`, {
+            body: await this.page.screenshot({ fullPage: true }),
+            contentType: 'image/png',
+          })
+          .catch(() => {});
+
+        if (attempt === 1) {
+          throw new Error(
+            'PaymentLinkPage.navigate: redirected to /login after /payment-link; storage state invalid or session lost (retry exhausted)'
+          );
+        }
+
+        console.warn('[PaymentLinkPage.navigate] /login after /payment-link — stabilizing via /account then retry');
+        await this.page.goto('/account', { waitUntil: 'domcontentloaded' });
+        await assertStillAuthenticated(this.page, testInfo, 'PaymentLinkPage.navigate recovery /account');
+        continue;
+      }
+
+      break;
+    }
+
     await assertStillAuthenticated(this.page, testInfo, 'PaymentLinkPage.navigate after goto /payment-link');
     await ensureBizflexCardModalClosed(this.page);
     await this.dismissBlockingCardModalIfPresent();

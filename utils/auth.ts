@@ -1,10 +1,12 @@
 import 'dotenv/config';
-import { getAuthenticatedStorageState } from '../support/auth/storageState';
+import { duplicateCanonicalAuthStorageToWorkerFiles, getAuthenticatedStorageState } from '../support/auth/storageState';
 
 /**
- * CLI: refresh `storage/authenticated-user.json` (same pipeline as Playwright globalSetup).
+ * CLI: refresh `storage/authenticated-user.json` and clone to worker slot files (same pipeline as setup project).
  */
-getAuthenticatedStorageState().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+getAuthenticatedStorageState()
+  .then(() => duplicateCanonicalAuthStorageToWorkerFiles())
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
