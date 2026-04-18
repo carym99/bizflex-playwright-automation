@@ -6,7 +6,11 @@ loadEnv({ path: path.join(__dirname, '..', '..', '.env.local') });
 loadEnv({ path: path.join(__dirname, '..', '..', '.env') });
 
 /**
- * Ensures `storage/authenticated-user.json` exists before UI tests run (CI-safe).
+ * Legacy Playwright `globalSetup` hook (optional).
+ *
+ * **Default config** uses `tests/setup/auth.setup.ts` as a `setup` project dependency instead,
+ * so auth preparation appears as a first-class step in HTML reports. You can still import and
+ * invoke this module from CLI tools (e.g. `utils/auth.ts`) or temporarily wire `globalSetup` in config.
  */
 export default async function globalSetup(): Promise<void> {
   const startedAt = Date.now();

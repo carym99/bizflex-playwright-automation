@@ -23,19 +23,21 @@ function loginButton(page: Page) {
 test.describe('@auth User Login UI', () => {
   test('shows validation message for invalid email format', async ({ page }) => {
     test.setTimeout(60_000);
-    await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });
-    await assertLoginFormReady(page);
-    const emailInput = getLoginEmailInput(page);
-    const passwordInput = getLoginPasswordInput(page);
-    const submitButton = loginButton(page);
+    await test.step('Open login and fill invalid email', async () => {
+      await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });
+      await assertLoginFormReady(page);
+      const emailInput = getLoginEmailInput(page);
+      const passwordInput = getLoginPasswordInput(page);
+      await emailInput.fill('invalid-email');
+      await passwordInput.fill(getValidPassword());
+      await emailInput.blur();
+    });
 
-    await emailInput.fill('invalid-email');
-    await passwordInput.fill(getValidPassword());
-    await emailInput.blur();
-
-    await expect(submitButton).toBeDisabled();
-
-    await expect(page.getByText(/email must be a valid email/i)).toBeVisible();
+    await test.step('Expect client-side validation (no submit)', async () => {
+      const submitButton = loginButton(page);
+      await expect(submitButton).toBeDisabled();
+      await expect(page.getByText(/email must be a valid email/i)).toBeVisible();
+    });
   });
 
   test('shows validation for only password entered', async ({ page }) => {
@@ -56,9 +58,13 @@ test.describe('@auth User Login UI', () => {
   });
 
   test('logs in via UI and redirects to /account', async ({ page }) => {
-    const loginPage = new LoginPage(page);
-    await loginPage.uiLogin(getUiEmail(), getValidPassword());
-    await expect(page).toHaveURL(/\/account/i, { timeout: 45_000 });
+    await test.step('Login with valid credentials', async () => {
+      const loginPage = new LoginPage(page);
+      await loginPage.uiLogin(getUiEmail(), getValidPassword());
+    });
+    await test.step('Land on account', async () => {
+      await expect(page).toHaveURL(/\/account/i, { timeout: 45_000 });
+    });
   });
 
   test('shows suspended account message after backend returns 403', async ({ page }) => {

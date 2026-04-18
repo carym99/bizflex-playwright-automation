@@ -1,5 +1,6 @@
 /**
- * Live Netlify payment-link flow: Generate Link modal, publish, success, View Payment Links list.
+ * Live Netlify payment-link flow: single smoke happy path (create → publish → list).
+ * Below-minimum edge case lives in `tests/regression/payment-link.publish-below-minimum.ui.spec.ts`.
  */
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { PaymentLinkPage, type FillGenerateLinkFormParams } from '../../pages/PaymentLinkPage';
@@ -39,78 +40,45 @@ test.describe('@smoke Payment link create and verify', () => {
     const linkName = buildPaymentLinkName();
     const description = 'Playwright automated payment link';
 
-    await prepareAuthenticatedPage(page, testInfo);
+    await test.step('Prepare authenticated session', async () => {
+      await prepareAuthenticatedPage(page, testInfo);
+    });
 
     const paymentLinkPage = new PaymentLinkPage(page);
 
-    await paymentLinkPage.navigate(testInfo);
-    await assertStillAuthenticated(page, testInfo, 'after navigating to payment link page');
-
-    await paymentLinkPage.openGenerateLinkModal(testInfo);
-
-    await paymentLinkPage.verifyPublishButtonDisabled();
-    await paymentLinkPage.verifySaveDraftButtonDisabled();
-
-    const fillParams: FillGenerateLinkFormParams = {
-      name: linkName,
-      amount: '1000',
-      description,
-    };
-    if (process.env.TEST_EMAIL) {
-      fillParams.email = process.env.TEST_EMAIL;
-    }
-    await paymentLinkPage.fillGenerateLinkForm(fillParams);
-
-    await expect(page.getByRole('button', { name: /Publish Link/i })).toBeEnabled();
-
-    await paymentLinkPage.publishPaymentLink();
-
-    await paymentLinkPage.expectPaymentLinkGeneratedSuccessfully();
-
-    await paymentLinkPage.closeSuccessModal();
-
-    await assertStillAuthenticated(page, testInfo, 'after closing success modal');
-    await expect(page).toHaveURL(/payment-link/i);
-
-    await paymentLinkPage.clickViewPaymentLinks();
-
-    await assertStillAuthenticated(page, testInfo, 'after View Payment Links navigation');
-    await expect(page).not.toHaveURL(/\/payment-link\/?$/i);
-
-    await expectLinkNameVisibleWithArtifacts(page, testInfo, linkName);
-    await assertStillAuthenticated(page, testInfo, 'after list verification');
-  });
-
-  test('publish button stays disabled when amount is below minimum', async ({ page }, testInfo) => {
-    await prepareAuthenticatedPage(page, testInfo);
-    const paymentLinkPage = new PaymentLinkPage(page);
-
-    await paymentLinkPage.navigate(testInfo);
-    await paymentLinkPage.openGenerateLinkModal(testInfo);
-
-    await paymentLinkPage.fillGenerateLinkForm({
-      name: `Below min ${Date.now()}`,
-      amount: '999',
-      description: 'Amount below minimum (requires ≥ 1000)',
+    await test.step('Open payment link workspace', async () => {
+      await paymentLinkPage.navigate(testInfo);
+      await assertStillAuthenticated(page, testInfo, 'after navigating to payment link page');
     });
 
-    const publish = page.getByRole('button', { name: /Publish Link/i }).first();
-    await expect(publish).toBeVisible({ timeout: 15_000 });
+    await test.step('Create and publish link', async () => {
+      await paymentLinkPage.openGenerateLinkModal(testInfo);
+      await paymentLinkPage.verifyPublishButtonDisabled();
+      await paymentLinkPage.verifySaveDraftButtonDisabled();
 
-    const disabled = await publish.isDisabled();
-    if (disabled) {
-      await expect(publish).toBeDisabled();
-      return;
-    }
-
-    // Environment variance: if backend permits 999, capture observable state instead of failing noisily.
-    await testInfo.attach('below-min-amount-behavior.txt', {
-      body: Buffer.from(
-        `Publish button remained enabled for amount=999 at URL=${page.url()}. App behavior does not enforce disabled state in this environment.`,
-        'utf8'
-      ),
-      contentType: 'text/plain',
+      const fillParams: FillGenerateLinkFormParams = {
+        name: linkName,
+        amount: '1000',
+        description,
+      };
+      if (process.env.TEST_EMAIL) {
+        fillParams.email = process.env.TEST_EMAIL;
+      }
+      await paymentLinkPage.fillGenerateLinkForm(fillParams);
+      await expect(page.getByRole('button', { name: /Publish Link/i })).toBeEnabled();
+      await paymentLinkPage.publishPaymentLink();
+      await paymentLinkPage.expectPaymentLinkGeneratedSuccessfully();
     });
-    await expect(page.getByText(/You’ll receive|You'll receive/i)).toBeVisible({ timeout: 10_000 });
+
+    await test.step('Close success and verify list', async () => {
+      await paymentLinkPage.closeSuccessModal();
+      await assertStillAuthenticated(page, testInfo, 'after closing success modal');
+      await expect(page).toHaveURL(/payment-link/i);
+      await paymentLinkPage.clickViewPaymentLinks();
+      await assertStillAuthenticated(page, testInfo, 'after View Payment Links navigation');
+      await expect(page).not.toHaveURL(/\/payment-link\/?$/i);
+      await expectLinkNameVisibleWithArtifacts(page, testInfo, linkName);
+      await assertStillAuthenticated(page, testInfo, 'after list verification');
+    });
   });
 });

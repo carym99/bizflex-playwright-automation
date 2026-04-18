@@ -9,7 +9,7 @@ This folder documents the shared test standards for this Playwright project. The
 
 ## GitHub Actions (CI)
 
-Workflows: `.github/workflows/ci-smoke.yml` (pull requests), `.github/workflows/ci-full.yml` (push to `main`), `.github/workflows/nightly-regression.yml` (schedule). Global setup seeds `storage/authenticated-user.json` via API login and a headless Chromium visit to the SPA.
+Workflows: `.github/workflows/ci-smoke.yml` (pull requests), `.github/workflows/ci-full.yml` (push to `main`), `.github/workflows/nightly-regression.yml` (schedule). Authenticated UI uses project **`setup`** (`tests/setup/auth.setup.ts`) which calls the same seeding as `storage/authenticated-user.json`, then copies state to **`playwright/.auth/user.json`** for the `chromium` project.
 
 ### Required repository settings
 

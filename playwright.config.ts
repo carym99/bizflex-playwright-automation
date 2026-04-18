@@ -4,17 +4,19 @@ import * as path from 'path';
 import * as os from 'os';
 
 /**
- * Authenticated UI uses `storage/authenticated-user.json`.
- * Session is seeded on the **SPA origin** (default https://bizflex-app.netlify.app), not the API host,
- * so `PLAYWRIGHT_BASE_URL`/`BASE_URL` must match where the browser loads the app.
+ * Auth for authenticated UI:
+ * - `tests/setup/auth.setup.ts` runs first (project `setup`) and copies seeded storage to `playwright/.auth/user.json`.
+ * - `chromium` project depends on `setup` and loads that file (explicit in reports vs only globalSetup).
  *
- * Tests live under `tests/` and are filtered in CI by lane tags: @smoke, @auth, @api-auth, @regression.
+ * API tests use `APIRequestContext` (no browser storage). Login UI uses `ui-login` with empty storage.
+ *
  * Tag constants: `config/tags.ts`.
  */
 loadEnv({ path: path.join(__dirname, '.env.local') });
 loadEnv({ path: path.join(__dirname, '.env') });
 
-const authenticatedStorageState = path.join(__dirname, 'storage', 'authenticated-user.json');
+/** Canonical path used by setup project after `getAuthenticatedStorageState()` runs. */
+const playwrightAuthState = path.join(__dirname, 'playwright', '.auth', 'user.json');
 /** Fresh browser profile (no saved auth) for login UI specs */
 const emptyStorageState = { cookies: [], origins: [] };
 
@@ -47,10 +49,10 @@ export default defineConfig({
   timeout: process.env.CI ? 90_000 : 60_000,
   expect: {
     timeout: process.env.CI ? 15_000 : 10_000,
+    /** Visual baselines: allow small anti-aliasing drift when `VISUAL_REGRESSION=1`. */
+    toHaveScreenshot: { maxDiffPixels: 500 },
   },
   reporter: reporters,
-
-  globalSetup: path.join(__dirname, 'support', 'auth', 'global-setup.ts'),
 
   use: {
     baseURL: uiBaseURL,
@@ -58,15 +60,19 @@ export default defineConfig({
     testIdAttribute: 'data-testid',
     actionTimeout: 15_000,
     navigationTimeout: process.env.CI ? 45_000 : 30_000,
+    /** CI: traces on retry keep artifacts small while preserving first-failure context. */
+    trace: process.env.CI ? 'on-first-retry' : 'retain-on-failure',
     screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
     video: 'retain-on-failure',
   },
 
   projects: [
     {
+      name: 'setup',
+      testMatch: '**/setup/auth.setup.ts',
+    },
+    {
       name: 'api',
-      testDir: './tests',
       testMatch: ['api-auth/**/*.spec.ts', 'regression/**/*.api.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
@@ -74,19 +80,18 @@ export default defineConfig({
       },
     },
     {
-      name: 'ui-authenticated',
-      testDir: './tests',
+      name: 'chromium',
+      dependencies: ['setup'],
       testMatch: ['smoke/**/*.spec.ts', 'regression/**/*.spec.ts'],
-      testIgnore: ['**/*.api.spec.ts'],
+      testIgnore: ['**/*.api.spec.ts', '**/setup/**'],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: uiBaseURL,
-        storageState: authenticatedStorageState,
+        storageState: playwrightAuthState,
       },
     },
     {
       name: 'ui-login',
-      testDir: './tests',
       testMatch: ['auth/**/*.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],

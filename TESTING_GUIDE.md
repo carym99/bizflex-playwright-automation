@@ -65,11 +65,16 @@ With `matrix.lane` in `smoke`, `auth`, `api-auth`, `regression`, the effective g
 
 | Project             | Purpose |
 |---------------------|---------|
-| `api`               | `tests/api-auth/**` and `tests/regression/**/*.api.spec.ts` — uses `API_URL` as `baseURL` |
-| `ui-authenticated`  | `tests/smoke/**` and `tests/regression/**` except `*.api.spec.ts` — uses SPA `baseURL` + `storage/authenticated-user.json` |
+| `setup`             | `tests/setup/auth.setup.ts` — seeds auth once per run; copies to `playwright/.auth/user.json` |
+| `api`               | `tests/api-auth/**` and `tests/regression/**/*.api.spec.ts` — uses `API_URL` as `baseURL` (`request` only) |
+| `chromium`          | `tests/smoke/**` and `tests/regression/**` except `*.api.spec.ts` — depends on `setup`; SPA `baseURL` + `playwright/.auth/user.json` |
 | `ui-login`          | `tests/auth/**` — SPA `baseURL` + empty `storageState` |
 
 `playwright test` without `--project` runs all projects. Lane scripts use `--grep` only so each job still executes the right **projects** for matching tests.
+
+**Visual regression (opt-in):** set `VISUAL_REGRESSION=1` and run `tests/regression/visual.critical.spec.ts` and `tests/auth/visual-login.spec.ts` with `--update-snapshots` once to commit baselines.
+
+**Helpers:** `support/network/optionalRouteStubs.ts` (browser `page.route` patterns), `support/api/pollWithPass.ts` (`expect().toPass` wrapper).
 
 ## Local commands
 

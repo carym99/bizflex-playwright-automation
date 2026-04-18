@@ -8,22 +8,29 @@ import { isDashboardShellVisible } from '../../support/ui/dashboardReadiness';
 test.describe('@smoke Dashboard shell', () => {
   test('account dashboard loads (flexible shell checks)', async ({ page }, testInfo) => {
     test.setTimeout(90_000);
-    await prepareAuthenticatedPage(page, testInfo);
 
-    await expect(page).toHaveURL(/\/account/i);
+    await test.step('Load account with seeded auth', async () => {
+      await prepareAuthenticatedPage(page, testInfo);
+    });
 
-    expect(await isDashboardShellVisible(page)).toBeTruthy();
+    await test.step('Assert URL and shell', async () => {
+      await expect(page).toHaveURL(/\/account/i);
+      expect(await isDashboardShellVisible(page)).toBeTruthy();
+    });
 
-    const hasSearch = (await page.getByPlaceholder(/search/i).count()) > 0;
-    const hasNavText =
-      (await page.getByText(/Quick Action|Transfer|Pay Bills|International Transfer|Withdraw Cash/i).count()) >
-      0;
-    const hasBalance = (await page.locator('[data-testid="account-balance"]').count()) > 0;
-    expect(hasSearch || hasNavText || hasBalance).toBeTruthy();
+    await test.step('Flexible shell heuristics (search / nav / balance)', async () => {
+      const hasSearch = (await page.getByPlaceholder(/search/i).count()) > 0;
+      const hasNavText =
+        (await page.getByText(/Quick Action|Transfer|Pay Bills|International Transfer|Withdraw Cash/i).count()) >
+        0;
+      const hasBalance = (await page.locator('[data-testid="account-balance"]').count()) > 0;
+      expect(hasSearch || hasNavText || hasBalance).toBeTruthy();
+    });
 
-    const cardModalHeadline = page.getByText(/Your New BizFlex Card Awaits/i);
-    await expect(cardModalHeadline).not.toBeVisible();
-
-    await expect(page.locator('.css-pyq07j')).toHaveCount(0);
+    await test.step('No blocking card promo', async () => {
+      const cardModalHeadline = page.getByText(/Your New BizFlex Card Awaits/i);
+      await expect(cardModalHeadline).not.toBeVisible();
+      await expect(page.locator('.css-pyq07j')).toHaveCount(0);
+    });
   });
 });
