@@ -6,6 +6,7 @@ import { isLikelyJwt } from '../../schemas/token.schema';
 import { logAuthDiagnostics } from './debugAuthState';
 import { buildBrowserAuthSeed, loginByApi } from './loginByApi';
 import { gotoWithRetry } from '../ui/navigation';
+import { LoginPage } from '../../pages/LoginPage';
 
 const STORAGE_FILENAME = 'authenticated-user.json';
 const SESSION_SEED_FILENAME = 'authenticated-session-seed.json';
@@ -171,8 +172,23 @@ async function seedBrowserStorageAndSaveState(
         // Client router may be slow; fall through to URL assertion below.
       }
       if (/\/login/i.test(page.url())) {
-        await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check');
-        throw new Error('Seeded browser session redirected to /login during /account check');
+        const password = process.env.TEST_PASSWORD;
+        if (!password) {
+          await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check');
+          throw new Error(
+            'Seeded browser session redirected to /login during /account check. Set TEST_PASSWORD to enable UI login fallback in global setup.'
+          );
+        }
+        console.warn(
+          '[auth-storage] Injected API tokens were not accepted by the SPA; completing session via UI login (same credentials)'
+        );
+        const loginPage = new LoginPage(page);
+        await loginPage.uiLogin(email, password);
+      }
+
+      if (/\/login/i.test(page.url())) {
+        await logAuthDiagnostics(page, 'seedBrowserStorageAndSaveState /account check after UI fallback');
+        throw new Error('Seeded browser session still on /login after UI login fallback');
       }
 
       await persistAuthSessionSeed({ ...loginResponse, accessToken, refreshToken }, email);
