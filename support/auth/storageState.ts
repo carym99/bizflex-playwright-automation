@@ -4,7 +4,7 @@ import { chromium, request as playwrightRequest } from '@playwright/test';
 import { resolveApiUrl, extractTokenFromLoginBody, extractRefreshTokenFromLoginBody } from '../../utils/api';
 import { isLikelyJwt } from '../../schemas/token.schema';
 import { logAuthDiagnostics } from './debugAuthState';
-import { loginByApi } from './loginByApi';
+import { buildBrowserAuthSeed, loginByApi } from './loginByApi';
 import { gotoWithRetry } from '../ui/navigation';
 
 const STORAGE_FILENAME = 'authenticated-user.json';
@@ -17,10 +17,6 @@ const SESSION_SEED_FILENAME = 'authenticated-session-seed.json';
 function resolveUiBaseUrlForAuthStorage(): string {
   const raw = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'https://bizflex-app.netlify.app';
   return raw.trim().replace(/\/$/, '');
-}
-
-function toSpaOrigin(urlLike: string): string {
-  return new URL(urlLike).origin;
 }
 
 type LoginApiResponse = {
@@ -88,17 +84,17 @@ async function seedBrowserStorageAndSaveState(
     args: process.env.CI ? ['--disable-dev-shm-usage'] : [],
   });
   try {
-    const spaOrigin = toSpaOrigin(uiBaseUrl);
-    const context = await browser.newContext({ baseURL: spaOrigin });
+    const rawBase = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
+    const resolvedBaseUrl = new URL(rawBase);
+    /** Single origin for context + navigations so localStorage applies to the same host the SPA uses. */
+    const spaOriginFromBase = resolvedBaseUrl.origin;
+    const context = await browser.newContext({ baseURL: spaOriginFromBase });
     const page = await context.newPage();
     if (process.env.CI) {
       page.setDefaultNavigationTimeout(120_000);
       page.setDefaultTimeout(60_000);
     }
     try {
-      const rawBase = process.env.PLAYWRIGHT_BASE_URL || uiBaseUrl;
-      const resolvedBaseUrl = new URL(rawBase);
-      const spaOriginFromBase = resolvedBaseUrl.origin;
       const initialPath = resolvedBaseUrl.pathname && resolvedBaseUrl.pathname !== '/' ? resolvedBaseUrl.pathname : '/';
 
       await gotoWithRetry(page, new URL(initialPath, spaOriginFromBase).toString(), {
@@ -114,9 +110,10 @@ async function seedBrowserStorageAndSaveState(
         throw new Error('[auth-storage] Login succeeded but no bearer token found in response body');
       }
       const refreshToken = extractRefreshTokenFromLoginBody(loginResponse) ?? '';
+      const browserSeed = buildBrowserAuthSeed(loginResponse);
 
       await page.evaluate(
-        ({ loginResponse, email }) => {
+        ({ loginResponse, email, browserSeed: seed }) => {
           const typedResponse = loginResponse as { accessToken?: unknown; refreshToken?: unknown };
           const access = typeof typedResponse.accessToken === 'string' ? typedResponse.accessToken : '';
           const refresh = typeof typedResponse.refreshToken === 'string' ? typedResponse.refreshToken : '';
@@ -125,6 +122,9 @@ async function seedBrowserStorageAndSaveState(
           localStorage.setItem('accessToken', access);
           localStorage.setItem('authToken', access);
           localStorage.setItem('refreshToken', refresh);
+          if (seed.userJson) {
+            localStorage.setItem('user', seed.userJson);
+          }
 
           sessionStorage.setItem('user', JSON.stringify(loginResponse));
           sessionStorage.setItem('email', email);
@@ -132,6 +132,12 @@ async function seedBrowserStorageAndSaveState(
         {
           loginResponse: { ...loginResponse, accessToken, refreshToken },
           email,
+          browserSeed: {
+            userJson:
+              browserSeed.user !== null && browserSeed.user !== undefined
+                ? JSON.stringify(browserSeed.user)
+                : null,
+          },
         }
       );
 
@@ -145,13 +151,22 @@ async function seedBrowserStorageAndSaveState(
       if (!debugState.sessionStorage.user) {
         throw new Error('sessionStorage.user was not set after auth seeding');
       }
+      if (!debugState.localStorage.accessToken || !debugState.localStorage.token) {
+        throw new Error('[auth-storage] accessToken/token missing from localStorage after seeding');
+      }
 
-      await gotoWithRetry(page, new URL('/account', spaOriginFromBase).toString(), {
+      const accountUrl = new URL('/account', spaOriginFromBase).toString();
+      const accountWaitMs = process.env.CI ? 120_000 : 60_000;
+
+      await gotoWithRetry(page, new URL('/', spaOriginFromBase).toString(), {
+        waitUntil: 'domcontentloaded',
+      });
+      await gotoWithRetry(page, accountUrl, {
         waitUntil: 'domcontentloaded',
       });
       await page.waitForLoadState('load').catch(() => {});
       try {
-        await page.waitForURL(/\/account/i, { timeout: process.env.CI ? 75_000 : 45_000 });
+        await page.waitForURL(/\/account/i, { timeout: accountWaitMs });
       } catch {
         // Client router may be slow; fall through to URL assertion below.
       }
@@ -320,6 +335,12 @@ async function regenerateStorage(outPath: string, uiBaseUrl: string): Promise<st
       await runSeed();
     } catch (seedErr) {
       console.warn('[auth-storage] Browser seeding failed once; retrying after fresh API login', seedErr);
+      const delayMs = Number(process.env.AUTH_SEED_RETRY_DELAY_MS);
+      if (Number.isFinite(delayMs) && delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      } else if (process.env.CI) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
       await runSeed();
     }
     console.log('[auth-storage] New session generated:', outPath);
