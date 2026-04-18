@@ -15,6 +15,7 @@
     "test:api-auth": "playwright test --grep @api-auth",
     "test:e2e": "cucumber-js e2e/features --require-module ts-node/register --require e2e/support/**/*.ts --require e2e/step-definitions/**/*.ts",
     "test:smoke": "playwright test --grep @smoke",
+    "test:pr-gate": "playwright test --grep \"@smoke|@auth|@api-auth\"",
     "test:regression": "playwright test --grep @regression",
     "test:security": "playwright test --grep @security",
     "report": "playwright show-report"

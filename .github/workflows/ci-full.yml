@@ -1,0 +1,115 @@
+name: CI Full (main)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-full-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matrix-lanes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        lane:
+          - smoke
+          - auth
+          - api-auth
+          - regression
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Verify required credentials for Playwright (fail fast)
+        shell: bash
+        env:
+          TEST_EMAIL_SECRET: ${{ secrets.TEST_EMAIL }}
+          TEST_EMAIL_VAR: ${{ vars.TEST_EMAIL }}
+          TEST_PASSWORD_SECRET: ${{ secrets.TEST_PASSWORD }}
+        run: |
+          export RESOLVED_TEST_EMAIL="${TEST_EMAIL_SECRET:-${TEST_EMAIL_VAR:-}}"
+          export RESOLVED_TEST_PASSWORD="${TEST_PASSWORD_SECRET:-}"
+
+          if [ -z "$RESOLVED_TEST_EMAIL" ]; then
+            echo "::error::Missing TEST_EMAIL. Add either:"
+            echo "- Repository Secret: TEST_EMAIL"
+            echo "- or Repository Variable: TEST_EMAIL"
+            exit 1
+          fi
+
+          if [ -z "$RESOLVED_TEST_PASSWORD" ]; then
+            echo "::error::Missing TEST_PASSWORD repository secret"
+            exit 1
+          fi
+
+          {
+            echo "TEST_EMAIL<<__CRED_EOF__"
+            echo "$RESOLVED_TEST_EMAIL"
+            echo "__CRED_EOF__"
+            echo "TEST_PASSWORD<<__CRED_EOF__"
+            echo "$RESOLVED_TEST_PASSWORD"
+            echo "__CRED_EOF__"
+          } >> "$GITHUB_ENV"
+
+          echo "TEST_EMAIL configured: yes"
+          echo "TEST_PASSWORD configured: yes"
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright Tests
+        env:
+          CI: true
+          API_URL: ${{ secrets.API_URL }}
+          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+          TEST_EMAIL: ${{ env.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
+          VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
+          VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
+          UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
+          UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
+          MFA_USER_EMAIL: ${{ secrets.MFA_USER_EMAIL }}
+          MFA_USER_PASSWORD: ${{ secrets.MFA_USER_PASSWORD }}
+          FAILED_LOGIN_BUDGET_MS: "7000"
+        shell: bash
+        run: |
+          export API_URL="${API_URL:-https://bizflex.onrender.com}"
+          export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
+          export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
+
+          echo "## Lane @${{ matrix.lane }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- HTML/JUnit under artifact **playwright-report-${{ matrix.lane }}**" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Listing tests for lane @${{ matrix.lane }}..."
+          npx playwright test --list --grep "@${{ matrix.lane }}"
+
+          npx playwright test --grep "@${{ matrix.lane }}"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report-${{ matrix.lane }}
+          path: |
+            playwright-report
+            test-results
+            reports
+          retention-days: 14
+          if-no-files-found: ignore

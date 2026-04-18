@@ -25,7 +25,7 @@ export class PaymentLinkPage {
   constructor(private readonly page: Page) {}
 
   private createUniqueLinkButton(): Locator {
-    return this.page.locator("//button[normalize-space()='Create Unique Link']");
+    return this.page.getByRole('button', { name: /Create Unique Link/i });
   }
 
   private generateLinkDrawerTitle(): Locator {

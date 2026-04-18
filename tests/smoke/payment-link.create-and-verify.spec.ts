@@ -5,6 +5,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { PaymentLinkPage, type FillGenerateLinkFormParams } from '../../pages/PaymentLinkPage';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
+import { buildPaymentLinkName } from '../shared/factories/paymentLink.factory';
 
 async function expectLinkNameVisibleWithArtifacts(page: Page, testInfo: TestInfo, linkName: string): Promise<void> {
   try {
@@ -35,7 +36,7 @@ async function expectLinkNameVisibleWithArtifacts(page: Page, testInfo: TestInfo
 test.describe('@smoke Payment link create and verify', () => {
   test('authenticated user can create and verify a payment link', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
-    const linkName = `Automation Link ${Date.now()}`;
+    const linkName = buildPaymentLinkName();
     const description = 'Playwright automated payment link';
 
     await prepareAuthenticatedPage(page, testInfo);

@@ -1,33 +1,29 @@
-name: Playwright Lanes
+name: CI Smoke (PR)
 
 on:
   pull_request:
-  push:
-    branches: [main]
-  workflow_dispatch:
+
+concurrency:
+  group: ci-smoke-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  playwright-lanes:
+  smoke-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        lane:
-          - smoke
-          - auth
-          - api-auth
-          - regression
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'npm'
+          cache: npm
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Verify required credentials for Playwright (fail fast)
         shell: bash
@@ -38,19 +34,14 @@ jobs:
         run: |
           export RESOLVED_TEST_EMAIL="${TEST_EMAIL_SECRET:-${TEST_EMAIL_VAR:-}}"
           export RESOLVED_TEST_PASSWORD="${TEST_PASSWORD_SECRET:-}"
-
           if [ -z "$RESOLVED_TEST_EMAIL" ]; then
-            echo "::error::Missing TEST_EMAIL. Add either:"
-            echo "- Repository Secret: TEST_EMAIL"
-            echo "- or Repository Variable: TEST_EMAIL"
+            echo "::error::Missing TEST_EMAIL (secret or variable)"
             exit 1
           fi
-
           if [ -z "$RESOLVED_TEST_PASSWORD" ]; then
-            echo "::error::Missing TEST_PASSWORD repository secret"
+            echo "::error::Missing TEST_PASSWORD secret"
             exit 1
           fi
-
           {
             echo "TEST_EMAIL<<__CRED_EOF__"
             echo "$RESOLVED_TEST_EMAIL"
@@ -60,16 +51,12 @@ jobs:
             echo "__CRED_EOF__"
           } >> "$GITHUB_ENV"
 
-          echo "TEST_EMAIL configured: yes"
-          echo "TEST_PASSWORD configured: yes"
-
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright Tests
+      - name: Run PR smoke gate (@smoke | @auth | @api-auth)
         env:
           CI: true
           API_URL: ${{ secrets.API_URL }}
@@ -88,23 +75,19 @@ jobs:
           export API_URL="${API_URL:-https://bizflex.onrender.com}"
           export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
           export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
-
-          echo "================================================"
-          echo "Running Playwright lane: @${{ matrix.lane }}"
-          echo "================================================"
-
-          echo "Listing tests that match this lane..."
-          npx playwright test --list --grep "@${{ matrix.lane }}"
-
-          echo "Running matching tests..."
-          npx playwright test --grep "@${{ matrix.lane }}"
+          echo "### PR smoke gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "Grep: \`@smoke|@auth|@api-auth\` (see \`config/tags.ts\` → \`prSmokeGateGrep\`)" >> "$GITHUB_STEP_SUMMARY"
+          npx playwright test --list --grep "@smoke|@auth|@api-auth"
+          npx playwright test --grep "@smoke|@auth|@api-auth"
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: playwright-report-${{ matrix.lane }}
+          name: playwright-report-pr-smoke
           path: |
             playwright-report
             test-results
+            reports
+          retention-days: 7
           if-no-files-found: ignore

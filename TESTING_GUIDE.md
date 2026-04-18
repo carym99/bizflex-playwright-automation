@@ -45,9 +45,15 @@ Regression-only tests should have **only** `@regression` so they are not picked 
 
 ## How CI maps to tags
 
-Workflow: `.github/workflows/playwright-lanes.yml`.
+| Workflow | When | What runs |
+|----------|------|-----------|
+| `ci-smoke.yml` | Every **pull request** | `--grep "@smoke|@auth|@api-auth"` (fast gate; see `config/tags.ts` → `prSmokeGateGrep`) |
+| `ci-full.yml` | **Push to `main`** (+ manual) | Matrix lanes: each job `--grep "@${{ matrix.lane }}"` for `smoke`, `auth`, `api-auth`, `regression` |
+| `nightly-regression.yml` | **Schedule** (06:00 UTC) + manual | Full `playwright test` (all projects, no lane grep) |
 
-Each matrix job runs:
+Lane constants live in **`config/tags.ts`** so scripts and docs stay aligned.
+
+Main-branch matrix example:
 
 ```bash
 npx playwright test --grep "@${{ matrix.lane }}"
@@ -72,7 +78,10 @@ npm run test:smoke
 npm run test:auth
 npm run test:api-auth
 npm run test:regression
+npm run test:pr-gate
 ```
+
+`test:pr-gate` matches the **pull request** workflow (`@smoke|@auth|@api-auth`); see `config/tags.ts` (`prSmokeGateGrep`).
 
 Other useful scripts:
 
