@@ -88,6 +88,15 @@ jobs:
           export API_URL="${API_URL:-https://bizflex.onrender.com}"
           export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
           export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
+
+          echo "================================================"
+          echo "Running Playwright lane: @${{ matrix.lane }}"
+          echo "================================================"
+
+          echo "Listing tests that match this lane..."
+          npx playwright test --list --grep "@${{ matrix.lane }}"
+
+          echo "Running matching tests..."
           npx playwright test --grep "@${{ matrix.lane }}"
 
       - name: Upload Playwright report
