@@ -82,7 +82,7 @@ async function postLoginWithTransientRetry(
   throw lastError;
 }
 
-test.describe('@api @auth @regression Login API', () => {
+test.describe('@api-auth Login API', () => {
   const loginUrl = () => resolveApiUrl(getLoginPath());
 
   test('logs in successfully with valid credentials', async ({ request }) => {

@@ -4,7 +4,7 @@ import { getUiEmail, getValidPassword } from '../../fixtures/auth.fixture';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe('@ui @auth @smoke User Login flow', () => {
+test.describe('@smoke User login lands on dashboard', () => {
   test('logs in from /login and lands on /account dashboard shell', async ({ page }) => {
     const loginPage = new LoginPage(page);
     await loginPage.uiLogin(getUiEmail(), getValidPassword());

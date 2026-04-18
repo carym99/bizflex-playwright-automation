@@ -82,7 +82,7 @@ async function getProtected(
   return { profileResponse, flagsResponse, profileBody, flagsBody };
 }
 
-test.describe('@api @auth @security Login account-state API', () => {
+test.describe('@api-auth Login account-state API', () => {
   test('locked account is gated on profile + registration-flags', async ({ request }) => {
     const email = process.env.LOCKED_USER_EMAIL;
     const password = process.env.LOCKED_USER_PASSWORD;

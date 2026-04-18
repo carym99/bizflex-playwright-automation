@@ -20,7 +20,7 @@ async function loginForTokens(request: APIRequestContext) {
   return { response, body };
 }
 
-test.describe('@api @auth @security Token refresh', () => {
+test.describe('@api-auth Token refresh', () => {
   test('refresh returns new access token; old refresh invalid after rotation', async ({ request }) => {
     test.skip(!process.env.TEST_EMAIL || !process.env.TEST_PASSWORD, 'Set TEST_EMAIL and TEST_PASSWORD');
     const login = await loginForTokens(request);

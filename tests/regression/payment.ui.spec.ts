@@ -6,7 +6,7 @@ import { paymentSelectors } from '../../utils/selectors';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
 
-test.describe('@ui @wallet Payment', () => {
+test.describe('@regression Payment UI', () => {
   test('account shows balance or payment context', async ({ page }, testInfo) => {
     await prepareAuthenticatedPage(page, testInfo);
     await assertStillAuthenticated(page, testInfo, 'payment: after prepare on /account');

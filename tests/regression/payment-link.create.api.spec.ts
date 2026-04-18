@@ -137,7 +137,7 @@ async function createUniqueOrSkip(request: APIRequestContext) {
   throw new Error('unreachable');
 }
 
-test.describe('@api @payment-link @regression POST /v1/payment/link/create', () => {
+test.describe('@regression POST /v1/payment/link/create', () => {
   test('successfully creates a dynamic payment link with valid payload', async ({ request }) => {
     test.skip(!process.env.TEST_PASSWORD, 'Set TEST_PASSWORD');
     test.skip(!process.env.TEST_EMAIL && !process.env.VALID_USER_EMAIL, 'Set TEST_EMAIL or VALID_USER_EMAIL');
@@ -405,7 +405,7 @@ test.describe('@api @payment-link @regression POST /v1/payment/link/create', () 
   });
 });
 
-test.describe('@api @payment-link @regression GET /v1/payment/dynamic/list', () => {
+test.describe('@regression GET /v1/payment/dynamic/list', () => {
   test('created payment link is visible in dynamic list by accountId', async ({ request }) => {
     test.skip(!process.env.TEST_PASSWORD, 'Set TEST_PASSWORD');
     test.skip(!process.env.TEST_EMAIL && !process.env.VALID_USER_EMAIL, 'Set TEST_EMAIL or VALID_USER_EMAIL');

@@ -15,9 +15,14 @@ Testing pyramid:
 ## Folder Structure
 
 ```text
-api/
-e2e/
-helpers/
-page-objects/
 tests/
-ui/
+  smoke/
+  auth/
+  api-auth/
+  regression/
+e2e/                 # Cucumber (separate from Playwright test runner)
+helpers/
+pages/
+fixtures/
+support/
+storage/             # generated auth state (global setup)

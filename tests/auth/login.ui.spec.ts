@@ -20,7 +20,7 @@ function loginButton(page: Page) {
   return getLoginSubmitButton(page);
 }
 
-test.describe('@ui @auth User Login UI', () => {
+test.describe('@auth User Login UI', () => {
   test('shows validation message for invalid email format', async ({ page }) => {
     test.setTimeout(60_000);
     await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });

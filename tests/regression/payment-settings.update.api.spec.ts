@@ -63,7 +63,7 @@ async function updateWithFreshAuthRetry(
   return res;
 }
 
-test.describe('@api @payment-settings @regression PATCH /v1/payment/settings/update', () => {
+test.describe('@regression PATCH /v1/payment/settings/update', () => {
   test('updates payment settings successfully with valid multipart payload', async ({ request }) => {
     test.skip(!process.env.TEST_PASSWORD, 'Set TEST_PASSWORD');
     test.skip(!process.env.TEST_EMAIL && !process.env.VALID_USER_EMAIL, 'Set TEST_EMAIL or VALID_USER_EMAIL');

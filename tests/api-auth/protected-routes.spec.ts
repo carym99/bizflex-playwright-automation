@@ -9,7 +9,7 @@ const profilePath = process.env.AUTH_SESSION_PATH || '/v1/users/profile';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe('@api @auth @security Protected routes', () => {
+test.describe('@api-auth Protected routes', () => {
   test('session endpoint rejects missing Authorization', async ({ request }) => {
     const res = await request.get(resolveApiUrl(profilePath), { failOnStatusCode: false });
     test.skip(res.status() === 404, `Session endpoint not available at ${profilePath}`);

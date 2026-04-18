@@ -32,7 +32,7 @@ async function expectLinkNameVisibleWithArtifacts(page: Page, testInfo: TestInfo
   }
 }
 
-test.describe('@ui @payment-link @smoke', () => {
+test.describe('@smoke Payment link create and verify', () => {
   test('authenticated user can create and verify a payment link', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
     const linkName = `Automation Link ${Date.now()}`;

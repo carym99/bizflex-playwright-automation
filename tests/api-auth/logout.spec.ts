@@ -22,7 +22,7 @@ async function loginForTokens(request: APIRequestContext) {
   };
 }
 
-test.describe('@api @auth @security Logout', () => {
+test.describe('@api-auth Logout', () => {
   test('logout then protected session endpoint rejects prior access token', async ({ request }) => {
     test.skip(!process.env.TEST_EMAIL || !process.env.TEST_PASSWORD, 'Set TEST_EMAIL and TEST_PASSWORD');
     const login = await loginForTokens(request);

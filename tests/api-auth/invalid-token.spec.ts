@@ -23,7 +23,7 @@ async function loginForAccessToken(request: APIRequestContext) {
   return { response, accessToken: String(body.accessToken || body.token || '') };
 }
 
-test.describe('@api @auth @security Invalid token handling', () => {
+test.describe('@api-auth Invalid token handling', () => {
   test('rejects tampered bearer token', async ({ request }) => {
     await skipIfProfileEndpointMissing(request);
     test.skip(!process.env.TEST_EMAIL || !process.env.TEST_PASSWORD, 'Set TEST_EMAIL and TEST_PASSWORD');

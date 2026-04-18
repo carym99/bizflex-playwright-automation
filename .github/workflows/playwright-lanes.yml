@@ -69,7 +69,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run lane
+      - name: Run Playwright Tests
         env:
           CI: true
           API_URL: ${{ secrets.API_URL }}
@@ -88,7 +88,7 @@ jobs:
           export API_URL="${API_URL:-https://bizflex.onrender.com}"
           export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
           export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
-          npm run test:${{ matrix.lane }}
+          npx playwright test --grep "@${{ matrix.lane }}"
 
       - name: Upload Playwright report
         if: always()

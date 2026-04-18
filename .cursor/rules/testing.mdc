@@ -31,13 +31,15 @@ Write (TypeScript + POM)
 ## Framework Structure
 
 ```text
-playwright/
-  api/
-  ui/
-  e2e/
-    features/
-    step-definitions/
-  helpers/
-  fixtures/
-  page-objects/
-  schemas/
+tests/
+  smoke/
+  auth/
+  api-auth/
+  regression/
+e2e/
+  features/
+  step-definitions/
+fixtures/
+pages/
+support/
+schemas/

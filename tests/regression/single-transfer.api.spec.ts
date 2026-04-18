@@ -77,7 +77,7 @@ async function createTransferWithFreshAuthRetry(
   return res;
 }
 
-test.describe('@api @transfers @regression POST /v1/account/single-transfer', () => {
+test.describe('@regression POST /v1/account/single-transfer', () => {
   test('creates single transfer with valid payload', async ({ request }) => {
     const payload = baseTransferPayload();
     console.log('[single-transfer] amount:', payload.amount);

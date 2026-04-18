@@ -2,6 +2,7 @@
 
 This folder documents the shared test standards for this Playwright project. The machine-readable rules live under `.cursor/rules/`.
 
+- Lane layout, tags, and CI mapping: `TESTING_GUIDE.md` (repo root)
 - Primary standard doc: `.cursor/rules/testing.mdc`
 - Keep secrets out of docs and specs; use env vars from `.env.local` / CI secrets.
 - Mirror Cypress behavior where parity is required.
@@ -31,7 +32,7 @@ The verify step fails fast with separate error messages if `TEST_EMAIL` is missi
 
 ## Transfer API Environment Setup
 
-`api/transfers/single-transfer.api.spec.ts` reads transfer secrets from env-backed fixture helpers.  
+`tests/regression/single-transfer.api.spec.ts` reads transfer secrets from env-backed fixture helpers.  
 Set these in `.env` (local) and CI secret vars:
 
 - `TRANSFER_ACCOUNT_ID`

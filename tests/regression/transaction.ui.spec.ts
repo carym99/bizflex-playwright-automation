@@ -4,7 +4,7 @@ import { transactionSelectors as s } from '../../utils/selectors';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
 
-test.describe('@ui @wallet @transfer Transaction history & balance', () => {
+test.describe('@regression Transaction history and balance', () => {
   test('transaction history page loads; table or empty state', async ({ page }, testInfo) => {
     await prepareAuthenticatedPage(page, testInfo);
     const tx = new TransactionPage(page);

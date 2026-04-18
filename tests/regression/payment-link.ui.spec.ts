@@ -5,7 +5,7 @@ import { PaymentLinkPage } from '../../pages/PaymentLinkPage';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
 
-test.describe('@ui @payment-link Payment Link', () => {
+test.describe('@regression Payment Link UI', () => {
   test('localStorage carries auth tokens after navigation', async ({ page }, testInfo) => {
     await prepareAuthenticatedPage(page, testInfo);
     const token = await page.evaluate(() => window.localStorage.getItem('token'));

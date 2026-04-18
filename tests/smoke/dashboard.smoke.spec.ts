@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 import { isDashboardShellVisible } from '../../support/ui/dashboardReadiness';
 
-test.describe('@smoke @ui Dashboard', () => {
+test.describe('@smoke Dashboard shell', () => {
   test('account dashboard loads (flexible shell checks)', async ({ page }, testInfo) => {
     test.setTimeout(90_000);
     await prepareAuthenticatedPage(page, testInfo);

@@ -177,7 +177,7 @@ async function waitForCompletion(page: Page): Promise<void> {
   await expect(body).toContainText(/payment/i);
 }
 
-test.describe('@ui @payment-link @e2e Customer payment via public payment link', () => {
+test.describe('@regression Customer payment via public payment link', () => {
   test('customer can reach review and complete payment (with email)', async ({ page, request }) => {
     test.setTimeout(180_000);
     const created = await createPaymentLinkViaApi(request);
