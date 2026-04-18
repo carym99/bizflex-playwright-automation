@@ -26,3 +26,6 @@ pages/
 fixtures/
 support/
 storage/             # generated auth state (global setup)
+```
+
+See `TESTING_GUIDE.md` for lane tags and CI commands.
