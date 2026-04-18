@@ -8,9 +8,9 @@ This document complements `TESTING_GUIDE.md`. It records the **current** state, 
 
 | Current problem | Why it is risky | Recommended fix | Expected benefit |
 |-----------------|-----------------|-----------------|------------------|
-| Two `LoginPage` implementations (`pages/`, `page-objects/`) | Drift, wrong imports, double maintenance | Deprecate `page-objects/`; route all UI through `pages/` | Single POM source of truth |
+| ~~Two `LoginPage` paths (`pages/`, `page-objects/`)~~ | ~~Drift~~ | **Resolved:** removed redundant `page-objects/LoginPage.ts` re-export | Imports use `pages/LoginPage` only |
 | XPath for “Create Unique Link” (`PaymentLinkPage`) | Breaks on copy/i18n/layout | `getByRole('button', { name: /…/ })` | Stable selectors |
-| `force: true` on several clicks (modals, publish) | Hides real actionability bugs | Prefer `scrollIntoViewIfNeeded`, dismiss overlays, then normal click | Fewer flakes, real user parity |
+| `force: true` on several clicks (modals, publish) | Hides real actionability bugs | **`clickWithScrollThenForceFallback`** (`support/ui/clickPreferringActionability.ts`) — normal click first | Fewer unnecessary `force` clicks |
 | Global setup depends on API + optional UI fallback | TLS/network flakiness to Render | Retain retries; optional `AUTH_SEED_RETRY_DELAY_MS`; document env | CI recovers without manual rerun |
 | `PLAYWRIGHT_BASE_URL` with path (e.g. `/login`) | Wrong `baseURL`, storage origin confusion | Origin-only URL in env | Consistent seeding and navigation |
 | Lane grep duplicated in YAML/scripts | Typos drift from matrix | Central `config/tags.ts` + docs | One definition of lane patterns |

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { clickWithScrollThenForceFallback } from './clickPreferringActionability';
 
 const ACCEPT_PATTERNS = [
   /accept/i,
@@ -17,7 +18,7 @@ export async function dismissCookieBanner(page: Page): Promise<void> {
   for (const pattern of ACCEPT_PATTERNS) {
     const byRole = page.getByRole('button', { name: pattern }).first();
     if (await byRole.isVisible().catch(() => false)) {
-      await byRole.click({ force: true }).catch(() => {});
+      await clickWithScrollThenForceFallback(byRole);
       return;
     }
   }
@@ -26,7 +27,7 @@ export async function dismissCookieBanner(page: Page): Promise<void> {
   if (await cookieRegion.isVisible().catch(() => false)) {
     const innerAccept = cookieRegion.getByRole('button', { name: /accept|agree|ok/i }).first();
     if (await innerAccept.isVisible().catch(() => false)) {
-      await innerAccept.click({ force: true }).catch(() => {});
+      await clickWithScrollThenForceFallback(innerAccept);
     }
   }
 }

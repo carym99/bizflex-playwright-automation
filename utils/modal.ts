@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { clickWithScrollThenForceFallback } from '../support/ui/clickPreferringActionability';
 
 /**
  * BizFlex post-login modal — mirrors Cypress ensureBizflexCardModalClosed (text/role first).
@@ -10,8 +11,7 @@ export async function ensureBizflexCardModalClosed(page: Page): Promise<void> {
 
     const maybeLater = page.getByRole('button', { name: /maybe later/i }).first();
     if (await maybeLater.isVisible().catch(() => false)) {
-      // The modal can re-render between visibility check and click.
-      await maybeLater.click({ force: true }).catch(() => {});
+      await clickWithScrollThenForceFallback(maybeLater);
       continue;
     }
 
@@ -21,14 +21,14 @@ export async function ensureBizflexCardModalClosed(page: Page): Promise<void> {
       )
       .first();
     if (await close.isVisible().catch(() => false)) {
-      await close.click({ force: true }).catch(() => {});
+      await clickWithScrollThenForceFallback(close);
       continue;
     }
 
     // Last resort: legacy hashed class, scoped by button text.
     const legacyMaybeLater = page.locator('.css-pyq07j').filter({ hasText: /maybe later/i }).first();
     if (await legacyMaybeLater.isVisible().catch(() => false)) {
-      await legacyMaybeLater.click({ force: true }).catch(() => {});
+      await clickWithScrollThenForceFallback(legacyMaybeLater);
     }
   }
 

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { clickWithScrollThenForceFallback } from './clickPreferringActionability';
 
 const CARD_HEADLINE = /Your New BizFlex Card Awaits/i;
 
@@ -14,7 +15,7 @@ export async function dismissCardModal(page: Page): Promise<void> {
   const visible = await target.isVisible().catch(() => false);
   if (!visible) return;
 
-  await target.click({ force: true }).catch(() => {});
+  await clickWithScrollThenForceFallback(target);
 
   const after = await page.locator('body').innerText().catch(() => '');
   if (CARD_HEADLINE.test(after)) {

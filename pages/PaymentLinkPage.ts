@@ -1,5 +1,6 @@
 import { type Page, type TestInfo, type Locator, expect } from '@playwright/test';
 import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
+import { clickWithScrollThenForceFallback } from '../support/ui/clickPreferringActionability';
 import { paymentLinkSelectors as s } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
 
@@ -102,12 +103,12 @@ export class PaymentLinkPage {
   private async dismissBlockingCardModalIfPresent(): Promise<void> {
     const maybeLater = this.page.getByRole('button', { name: /Maybe Later/i }).first();
     if (await maybeLater.isVisible().catch(() => false)) {
-      await maybeLater.click({ force: true }).catch(() => {});
+      await clickWithScrollThenForceFallback(maybeLater);
     }
 
     const closeModal = this.page.getByRole('button', { name: /Close modal|Close/i }).first();
     if (await closeModal.isVisible().catch(() => false)) {
-      await closeModal.click({ force: true }).catch(() => {});
+      await clickWithScrollThenForceFallback(closeModal);
     }
   }
 
@@ -128,7 +129,7 @@ export class PaymentLinkPage {
           .getByRole('button', { name: /Close|Got it|Maybe later|Dismiss/i })
           .first();
         if (await inDialog.isVisible().catch(() => false)) {
-          await inDialog.click({ force: true }).catch(() => {});
+          await clickWithScrollThenForceFallback(inDialog);
         }
       }
     }
@@ -212,8 +213,7 @@ export class PaymentLinkPage {
   async publishPaymentLink(): Promise<void> {
     const publish = this.publishButton().first();
     await expect(publish).toBeVisible({ timeout: 15_000 });
-    await publish.scrollIntoViewIfNeeded().catch(() => {});
-    await publish.click({ force: true });
+    await clickWithScrollThenForceFallback(publish);
   }
 
   /** Success copy in modal and/or Chakra toast host. */
@@ -224,8 +224,9 @@ export class PaymentLinkPage {
   }
 
   async closeSuccessModal(): Promise<void> {
-    await expect(this.gotItButton()).toBeVisible({ timeout: 30_000 });
-    await this.gotItButton().click({ force: true });
+    const gotIt = this.gotItButton();
+    await expect(gotIt).toBeVisible({ timeout: 30_000 });
+    await clickWithScrollThenForceFallback(gotIt);
   }
 
   async clickViewPaymentLinks(): Promise<void> {
