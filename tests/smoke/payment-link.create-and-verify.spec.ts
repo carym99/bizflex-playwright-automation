@@ -45,7 +45,7 @@ test.describe('@smoke Payment link create and verify', () => {
     await paymentLinkPage.navigate(testInfo);
     await assertStillAuthenticated(page, testInfo, 'after navigating to payment link page');
 
-    await paymentLinkPage.openGenerateLinkModal();
+    await paymentLinkPage.openGenerateLinkModal(testInfo);
 
     await paymentLinkPage.verifyPublishButtonDisabled();
     await paymentLinkPage.verifySaveDraftButtonDisabled();
@@ -85,7 +85,7 @@ test.describe('@smoke Payment link create and verify', () => {
     const paymentLinkPage = new PaymentLinkPage(page);
 
     await paymentLinkPage.navigate(testInfo);
-    await paymentLinkPage.openGenerateLinkModal();
+    await paymentLinkPage.openGenerateLinkModal(testInfo);
 
     await paymentLinkPage.fillGenerateLinkForm({
       name: `Below min ${Date.now()}`,

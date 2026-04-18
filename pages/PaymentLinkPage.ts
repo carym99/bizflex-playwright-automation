@@ -29,7 +29,9 @@ export class PaymentLinkPage {
   }
 
   private generateLinkDrawerTitle(): Locator {
-    return this.page.locator('text=Generate Link');
+    return this.page
+      .getByRole('heading', { name: /Generate Link/i })
+      .or(this.page.getByText(/Generate Link/i));
   }
 
   drawerRoot(): Locator {
@@ -38,7 +40,7 @@ export class PaymentLinkPage {
 
   // —— Live DOM locators (Netlify) ——
   generateLinkTitle(): Locator {
-    return this.generateLinkDrawerTitle().or(this.page.getByText('Generate Link'));
+    return this.generateLinkDrawerTitle();
   }
 
   paymentNameInput(): Locator {
@@ -163,20 +165,26 @@ export class PaymentLinkPage {
     await expect(fallback.first()).toBeVisible({ timeout: 20_000 });
   }
 
-  async openGenerateLinkModal(): Promise<void> {
+  async openGenerateLinkModal(testInfo?: TestInfo): Promise<void> {
     await this.dismissBlockingCardModalIfPresent();
     await this.dismissChakraBlockingModalsIfPresent();
     await ensureBizflexCardModalClosed(this.page);
     const createUniqueLinkButton = this.createUniqueLinkButton().first();
     await expect(createUniqueLinkButton).toBeVisible({ timeout: 20_000 });
     await expect(createUniqueLinkButton).toBeEnabled({ timeout: 30_000 });
-    console.log('Before click URL:', this.page.url());
     await createUniqueLinkButton.click();
-    console.log('After click URL:', this.page.url());
 
-    await expect(this.page.locator('text=Generate Link')).toBeVisible({ timeout: 10_000 });
-    await expect(this.paymentNameInput().first()).toBeVisible({ timeout: 10_000 });
-    await expect(this.amountInput().first()).toBeVisible({ timeout: 10_000 });
+    if (testInfo) {
+      await assertStillAuthenticated(
+        this.page,
+        testInfo,
+        'openGenerateLinkModal after Create Unique Link click'
+      );
+    }
+
+    // Prefer stable form controls over copy-only text (avoids flaky `text=` and duplicate waits).
+    await expect(this.paymentNameInput().first()).toBeVisible({ timeout: 20_000 });
+    await expect(this.amountInput().first()).toBeVisible({ timeout: 20_000 });
   }
 
   /** Mandatory for enabling Publish / Save to Draft: name, amount (≥1000), description. Email/phone optional unless product requires them. */

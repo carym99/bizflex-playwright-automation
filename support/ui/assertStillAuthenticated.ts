@@ -1,5 +1,6 @@
 import type { Page, TestInfo } from '@playwright/test';
 import { attachAuthFailureArtifacts, logAuthDiagnostics } from '../auth/debugAuthState';
+import { handleSessionTimeout } from './handleSessionTimeout';
 
 /**
  * If the app redirected to `/login`, attach diagnostics (when `testInfo` is set), log URL / cookies / storage, and throw.
@@ -42,5 +43,9 @@ export async function assertStillAuthenticated(
   testInfo: TestInfo,
   context = 'assertStillAuthenticated'
 ): Promise<void> {
+  // Session-expiry / forced re-auth modals often appear before URL becomes `/login`.
+  if (!/\/login/i.test(page.url())) {
+    await handleSessionTimeout(page);
+  }
   await failIfLoginRedirect(page, testInfo, context);
 }
