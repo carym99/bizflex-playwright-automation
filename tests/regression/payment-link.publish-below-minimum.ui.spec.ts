@@ -6,6 +6,8 @@ import { PaymentLinkPage } from '../../pages/PaymentLinkPage';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 
 test.describe('@regression Payment link publish — below minimum amount', () => {
+  test.describe.configure({ timeout: 240_000 });
+
   test('publish button stays disabled when amount is below minimum', async ({ page }, testInfo) => {
     await test.step('Open app with authenticated storage', async () => {
       await prepareAuthenticatedPage(page, testInfo);

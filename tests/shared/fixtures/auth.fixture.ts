@@ -4,6 +4,7 @@ import {
   getAuthenticatedStorageState,
   getAuthenticatedStorageStatePathForWorker,
 } from '../../../support/auth/storageState';
+import { getBearerTokenFromPage } from '../../../support/auth/browserAuthSession';
 import { assertStillAuthenticated } from '../../../support/ui/assertStillAuthenticated';
 import { installAuthSessionSeedInitScript } from '../../../support/ui/prepareAuthenticatedPage';
 
@@ -43,7 +44,7 @@ export const test = base.extend<{ authenticatedPage: Page }>({
         });
         await pg.waitForLoadState('domcontentloaded');
         if (process.env.CI) {
-          const tokenProbe = await pg.evaluate(() => Boolean(localStorage.getItem('accessToken')));
+          const tokenProbe = Boolean(await getBearerTokenFromPage(pg));
           console.log('[auth-fixture] after /account url=', pg.url(), 'accessTokenPresent=', tokenProbe);
         }
         if (/\/login/i.test(pg.url())) {

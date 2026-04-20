@@ -12,6 +12,11 @@ import {
   getAuthenticatedStorageStatePath,
 } from '../../support/auth/storageState';
 import { collectAuthDiagnostics } from '../../support/auth/debugAuthState';
+import {
+  getBearerTokenFromPage,
+  getRefreshTokenFromPage,
+  mirrorSessionUserTokensToLocalStorage,
+} from '../../support/auth/browserAuthSession';
 import { installAuthSessionSeedInitScript } from '../../support/ui/prepareAuthenticatedPage';
 
 setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo) => {
@@ -45,16 +50,17 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
     await page.waitForLoadState('domcontentloaded');
 
     if (process.env.CI) {
-      const accessProbe = await page.evaluate(() => Boolean(localStorage.getItem('accessToken')));
+      const accessProbe = Boolean(await getBearerTokenFromPage(page));
       console.log('[auth.setup] after /account url=', page.url(), 'accessTokenPresent=', accessProbe);
     }
 
     await expect(page).toHaveURL(/\/account/i, { timeout: 60_000 });
 
-    const accessToken = await page.evaluate(() => localStorage.getItem('accessToken'));
-    const refreshToken = await page.evaluate(() => localStorage.getItem('refreshToken'));
-    expect(accessToken, 'accessToken must exist in localStorage after /account').toBeTruthy();
-    expect(refreshToken, 'refreshToken must exist in localStorage after /account').toBeTruthy();
+    await mirrorSessionUserTokensToLocalStorage(page);
+    const accessToken = await getBearerTokenFromPage(page);
+    const refreshToken = await getRefreshTokenFromPage(page);
+    expect(accessToken, 'accessToken must exist in browser storage after /account').toBeTruthy();
+    expect(refreshToken, 'refreshToken must exist in browser storage after /account').toBeTruthy();
 
     await context.storageState({ path: storagePath });
     await duplicateCanonicalAuthStorageToWorkerFiles();

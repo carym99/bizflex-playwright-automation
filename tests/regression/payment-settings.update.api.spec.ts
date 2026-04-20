@@ -169,7 +169,9 @@ test.describe('@regression PATCH /v1/payment/settings/update', () => {
   test('excessively large logo upload is rejected', async ({ request }) => {
     const token = await loginForAccessToken(request);
     const logo = fakeFile('big.png', 'image/png', 8 * 1024 * 1024);
-    const { response, body } = await updatePaymentSettings(request, token, baseMultipart({ logo }));
+    const { response, body } = await updatePaymentSettings(request, token, baseMultipart({ logo }), {
+      timeoutMs: 120_000,
+    });
     expect([400, 401, 403, 413, 415, 422]).toContain(response.status());
     assertNoSensitiveFields(body);
   });

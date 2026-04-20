@@ -1,5 +1,6 @@
 import { type Page, type TestInfo, type Locator, expect } from '@playwright/test';
 import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
+import { pathnameLooksLikeLogin } from '../support/ui/authSessionRecovery';
 import { logAuthDiagnostics } from '../support/auth/debugAuthState';
 import { clickWithScrollThenForceFallback } from '../support/ui/clickPreferringActionability';
 import { paymentLinkSelectors as s } from '../utils/selectors';
@@ -146,7 +147,7 @@ export class PaymentLinkPage {
       await this.page.goto('/payment-link', { waitUntil: 'domcontentloaded' });
       logNav(`after goto /payment-link (attempt ${attempt})`);
 
-      if (/\/login/i.test(this.page.url())) {
+      if (pathnameLooksLikeLogin(this.page)) {
         if (process.env.CI) {
           await logAuthDiagnostics(this.page, `PaymentLinkPage.navigate login redirect attempt ${attempt}`);
         }
@@ -207,7 +208,9 @@ export class PaymentLinkPage {
     await ensureBizflexCardModalClosed(this.page);
     const createUniqueLinkButton = this.createUniqueLinkButton().first();
     await expect(createUniqueLinkButton).toBeVisible({ timeout: 20_000 });
-    await expect(createUniqueLinkButton).toBeEnabled({ timeout: 30_000 });
+    await expect
+      .poll(async () => createUniqueLinkButton.isEnabled(), { timeout: 20_000 })
+      .toBe(true);
     await createUniqueLinkButton.click();
 
     if (testInfo) {

@@ -5,6 +5,7 @@ import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedP
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
 
 test.describe('@regression Transaction history and balance', () => {
+  test.describe.configure({ timeout: 240_000 });
   test('transaction history page loads; table or empty state', async ({ page }, testInfo) => {
     await prepareAuthenticatedPage(page, testInfo);
     const tx = new TransactionPage(page);

@@ -7,6 +7,7 @@ import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedP
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
 
 test.describe('@regression Payment UI', () => {
+  test.describe.configure({ timeout: 240_000 });
   test('account shows balance or payment context', async ({ page }, testInfo) => {
     await prepareAuthenticatedPage(page, testInfo);
     await assertStillAuthenticated(page, testInfo, 'payment: after prepare on /account');

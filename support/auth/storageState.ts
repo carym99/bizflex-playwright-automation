@@ -8,9 +8,16 @@ import { logAuthDiagnostics } from './debugAuthState';
 import { buildBrowserAuthSeed, loginByApi } from './loginByApi';
 import { gotoWithRetry } from '../ui/navigation';
 import { LoginPage } from '../../pages/LoginPage';
-import { disposeContext, isAuthenticated, throwIfPageClosed } from './browserAuthSession';
+import {
+  disposeContext,
+  getBearerTokenFromPage,
+  getRefreshTokenFromPage,
+  mirrorSessionUserTokensToLocalStorage,
+  throwIfPageClosed,
+  waitUntilAuthenticated,
+} from './browserAuthSession';
 
-export { isAuthenticated, throwIfPageClosed } from './browserAuthSession';
+export { isAuthenticated, pathnameIsLoginRoute, throwIfPageClosed, waitUntilAuthenticated } from './browserAuthSession';
 
 const STORAGE_FILENAME = 'authenticated-user.json';
 const SESSION_SEED_FILENAME = 'authenticated-session-seed.json';
@@ -150,7 +157,6 @@ async function injectTokensAndNavigateToAccount(
   await gotoWithRetry(page, new URL('/account', spaOriginFromBase).toString(), {
     waitUntil: 'domcontentloaded',
   });
-  await page.waitForLoadState('load').catch(() => {});
   throwIfPageClosed(page, 'injectTokens:after /account goto');
 }
 
@@ -194,42 +200,47 @@ async function generateAuthenticatedStorageInBrowser(
 
         if (tryInjectionFirst && attempt === 1) {
           await injectTokensAndNavigateToAccount(page, spaOriginFromBase, resolvedBaseUrl, loginResponse, email);
-          const ok = await isAuthenticated(page);
+          try {
+            await waitUntilAuthenticated(page, { phase: `attempt-${attempt}-post-injection` });
+          } catch (e) {
+            await logAuthDiagnostics(page, `generateAuthenticatedStorage attempt ${attempt} post-injection`);
+            throw e;
+          }
           console.log(
-            `[auth-storage] attempt 1 post-injection url=${page.url()} isAuthenticated=${ok} tokenPresent=${Boolean(
-              await page.evaluate(() => localStorage.getItem('accessToken'))
+            `[auth-storage] attempt 1 post-injection url=${page.url()} tokenPresent=${Boolean(
+              await getBearerTokenFromPage(page)
             )}`
           );
-          if (!ok) {
-            throw new Error(
-              '[auth-storage] Token injection did not yield a session accepted by the SPA + API (isAuthenticated=false)'
-            );
-          }
         } else {
           const loginPage = new LoginPage(page);
           console.log(`[auth-storage] attempt ${attempt} using UI login (fresh context, no closed-page reuse)`);
           await loginPage.uiLogin(email, password);
           throwIfPageClosed(page, 'after uiLogin');
-          const ok = await isAuthenticated(page);
+          try {
+            await waitUntilAuthenticated(page, { phase: `attempt-${attempt}-post-ui-login` });
+          } catch (e) {
+            await logAuthDiagnostics(page, `generateAuthenticatedStorage attempt ${attempt} UI path`);
+            throw new Error('[auth-storage] UI login did not pass isAuthenticated (API or /login check)', {
+              cause: e instanceof Error ? e : undefined,
+            });
+          }
           console.log(
-            `[auth-storage] attempt ${attempt} post-ui-login url=${page.url()} isAuthenticated=${ok} tokenPresent=${Boolean(
-              await page.evaluate(() => localStorage.getItem('accessToken'))
+            `[auth-storage] attempt ${attempt} post-ui-login url=${page.url()} tokenPresent=${Boolean(
+              await getBearerTokenFromPage(page)
             )}`
           );
-          if (!ok) {
-            await logAuthDiagnostics(page, `generateAuthenticatedStorage attempt ${attempt} UI path`);
-            throw new Error('[auth-storage] UI login did not pass isAuthenticated (API or /login check)');
-          }
         }
 
+        await mirrorSessionUserTokensToLocalStorage(page);
+
         const accessFromStorage =
-          (await page.evaluate(() => localStorage.getItem('accessToken'))) ?? extractTokenFromLoginBody(loginResponse);
+          (await getBearerTokenFromPage(page)) ?? extractTokenFromLoginBody(loginResponse);
         const refreshFromStorage =
-          (await page.evaluate(() => localStorage.getItem('refreshToken'))) ??
+          (await getRefreshTokenFromPage(page)) ??
           extractRefreshTokenFromLoginBody(loginResponse) ??
           '';
         if (!accessFromStorage) {
-          throw new Error('[auth-storage] accessToken missing in localStorage after successful auth');
+          throw new Error('[auth-storage] accessToken missing in browser storage after successful auth');
         }
 
         await persistAuthSessionSeed(

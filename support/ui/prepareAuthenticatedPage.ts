@@ -1,5 +1,14 @@
-import { type Page, type TestInfo } from '@playwright/test';
+import { type Page, type TestInfo, expect } from '@playwright/test';
+import { getBearerTokenFromPage, mirrorSessionUserTokensToLocalStorage } from '../auth/browserAuthSession';
 import { assertAccessTokenPresent, failIfLoginRedirect } from './assertStillAuthenticated';
+import {
+  attemptUiLoginRecovery,
+  attemptUiLoginRecoveryFromLoginRoute,
+  getPagePathname,
+  logBrowserAuthDebug,
+  pathnameLooksLikeLogin,
+  waitForStableAuthenticatedRoute,
+} from './authSessionRecovery';
 import { dismissCardModal } from './dismissCardModal';
 import { dismissCookieBanner } from './dismissCookieBanner';
 import { handleSessionTimeout } from './handleSessionTimeout';
@@ -23,72 +32,141 @@ export async function installAuthSessionSeedInitScript(page: Page): Promise<void
   );
 }
 
-async function waitForAccountOrLoginRoute(page: Page): Promise<void> {
-  await page
-    .waitForFunction(
-      () => {
-        const p = window.location.pathname.toLowerCase();
-        return p.includes('account') || p.includes('login');
-      },
-      { timeout: 25_000 }
-    )
-    .catch(() => {});
-}
-
-async function attemptUiLoginRecovery(page: Page): Promise<boolean> {
-  const email = process.env.TEST_EMAIL;
-  const password = process.env.TEST_PASSWORD;
-  if (!email || !password) {
+async function hasBrowserTokens(page: Page): Promise<boolean> {
+  try {
+    return Boolean(await getBearerTokenFromPage(page));
+  } catch {
     return false;
   }
+}
 
-  const emailInput = page
-    .locator('[data-testid="email"], [data-testid="email-input"], input[type="email"]')
-    .first();
-  const passwordInput = page
-    .locator('[data-testid="password"], [data-testid="password-input"], input[type="password"]')
-    .first();
-  const submit = page.getByRole('button', { name: /login|sign in/i }).first();
-
-  const hasLoginForm =
-    (await emailInput.isVisible().catch(() => false)) &&
-    (await passwordInput.isVisible().catch(() => false)) &&
-    (await submit.isVisible().catch(() => false));
-  if (!hasLoginForm) return false;
-
-  await emailInput.fill(email);
-  await passwordInput.fill(password);
-  await submit.click();
-  await page.waitForURL(/\/account/i, { timeout: 45_000 });
-  console.warn('[auth] Seeded session redirected to /login; recovered with UI login fallback');
-  return true;
+async function assertHasBrowserTokens(page: Page, phase: string): Promise<void> {
+  /** Keep headroom for dashboard + assertions within typical 180–240s describe budgets. */
+  const tokenWaitMs = process.env.CI ? 55_000 : 45_000;
+  try {
+    await expect
+      .poll(async () => (await getBearerTokenFromPage(page)) ?? '', {
+        timeout: tokenWaitMs,
+      })
+      .not.toBe('');
+  } catch {
+    await logBrowserAuthDebug(page, `${phase}-missing-tokens`);
+    throw new Error(
+      `${phase}: expected bearer token in localStorage or sessionStorage.user after navigation`
+    );
+  }
 }
 
 /**
  * Standard entry for authenticated UI flows: land on account, clear interruptions, assert dashboard shell.
  * Always pass `testInfo` so an unexpected `/login` redirect attaches `auth-diagnostics.json` + screenshot.
+ *
+ * Avoids `waitForLoadState('load')` — the SPA keeps long-polling / trackers and never reaches `load` reliably in CI.
  */
 export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): Promise<void> {
   await installAuthSessionSeedInitScript(page);
 
   await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
   await page
-    .waitForLoadState('load', { timeout: process.env.CI ? 90_000 : 35_000 })
+    .waitForLoadState('networkidle', { timeout: process.env.CI ? 8_000 : 5_000 })
     .catch(() => {});
-  await waitForAccountOrLoginRoute(page);
-  if (/\/login/i.test(page.url())) {
-    const recovered = await attemptUiLoginRecovery(page);
-    if (!recovered) {
-      await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: initial navigation');
+
+  try {
+    await page.waitForFunction(
+      () => {
+        const p = window.location.pathname.toLowerCase();
+        return p.includes('account') || /^\/login(\/|$)/.test(p);
+      },
+      null,
+      { timeout: 30_000 }
+    );
+  } catch {
+    await logBrowserAuthDebug(page, 'prepareAuthenticatedPage wait for /account or /login path timeout');
+  }
+
+  if (pathnameLooksLikeLogin(page)) {
+    if (await hasBrowserTokens(page)) {
+      console.warn('[auth] prepareAuthenticatedPage: /login path with tokens — nudging /account');
+      await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      try {
+        await page.waitForFunction(
+          () => {
+            const p = window.location.pathname.toLowerCase();
+            return p.includes('account') || /^\/login(\/|$)/.test(p);
+          },
+          null,
+          { timeout: 20_000 }
+        );
+      } catch {
+        await logBrowserAuthDebug(page, 'prepareAuthenticatedPage post-nudge path wait');
+      }
+    }
+
+    if (pathnameLooksLikeLogin(page)) {
+      const recovered =
+        (await attemptUiLoginRecovery(page)) || (await attemptUiLoginRecoveryFromLoginRoute(page));
+      if (!recovered) {
+        await logBrowserAuthDebug(page, 'prepareAuthenticatedPage login path without UI recovery');
+        await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: initial navigation');
+        if (pathnameLooksLikeLogin(page)) {
+          throw new Error('prepareAuthenticatedPage: still on /login after failed recovery (see auth-debug logs)');
+        }
+      } else {
+        await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
+        try {
+          await page.waitForFunction(
+            () => {
+              const p = window.location.pathname.toLowerCase();
+              return p.includes('account') || /^\/login(\/|$)/.test(p);
+            },
+            null,
+            { timeout: 30_000 }
+          );
+        } catch {
+          await logBrowserAuthDebug(page, 'prepareAuthenticatedPage post-recovery path wait timeout');
+        }
+      }
     }
   }
-  await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after recovery check');
 
+  if (pathnameLooksLikeLogin(page)) {
+    await logBrowserAuthDebug(page, 'prepareAuthenticatedPage still on /login path before stable-route wait');
+    await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after recovery check');
+    if (pathnameLooksLikeLogin(page)) {
+      throw new Error('prepareAuthenticatedPage: still on /login before waitForStableAuthenticatedRoute');
+    }
+  }
+
+  await page.waitForURL(/\/account|\/login/i, { timeout: 45_000 }).catch(() => {});
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+
+  await assertHasBrowserTokens(page, 'prepareAuthenticatedPage');
+  await mirrorSessionUserTokensToLocalStorage(page);
+
+  const pathAfterTokens = getPagePathname(page);
+  const alreadyOnAccountShell =
+    pathAfterTokens.includes('account') && !pathnameLooksLikeLogin(page);
+  if (!alreadyOnAccountShell) {
+    await waitForStableAuthenticatedRoute(page, 25_000).catch(async () => {
+      await logBrowserAuthDebug(page, 'prepareAuthenticatedPage waitForStableAuthenticatedRoute timeout');
+      const p = getPagePathname(page);
+      const ok = p.includes('account') || p.includes('payment-link') || /\/transactions?/i.test(p);
+      if (!ok) {
+        throw new Error('prepareAuthenticatedPage: URL did not stabilize on /account, /payment-link, or /transactions');
+      }
+    });
+  }
+
+  await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after stable route');
   await handleSessionTimeout(page);
   await dismissCardModal(page);
   await dismissCookieBanner(page);
 
   await waitForDashboardReadiness(page);
+  await mirrorSessionUserTokensToLocalStorage(page).catch(() => {});
   await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after dashboard wait');
   await assertAccessTokenPresent(page, testInfo, 'prepareAuthenticatedPage: after dashboard wait');
 }

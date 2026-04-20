@@ -1,13 +1,41 @@
 import { type Page, type TestInfo, expect } from '@playwright/test';
 import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
+import {
+  attemptUiLoginRecovery,
+  attemptUiLoginRecoveryFromLoginRoute,
+  pathnameLooksLikeLogin,
+} from '../support/ui/authSessionRecovery';
+import { gotoWithRetry } from '../support/ui/navigation';
 import { transactionSelectors as s } from '../utils/selectors';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export class TransactionPage {
   constructor(private readonly page: Page) {}
 
   async visitHistory(testInfo: TestInfo): Promise<void> {
-    await this.page.goto('/transactions', { waitUntil: 'domcontentloaded' });
+    try {
+      await gotoWithRetry(this.page, '/transactions', { waitUntil: 'domcontentloaded' });
+    } catch (e) {
+      if (String(e).includes('ERR_ABORTED')) {
+        await sleepMs(2000);
+        await gotoWithRetry(this.page, '/transactions', { waitUntil: 'domcontentloaded' });
+      } else {
+        throw e;
+      }
+    }
+
+    if (pathnameLooksLikeLogin(this.page)) {
+      const recovered =
+        (await attemptUiLoginRecovery(this.page)) || (await attemptUiLoginRecoveryFromLoginRoute(this.page));
+      if (recovered) {
+        await gotoWithRetry(this.page, '/transactions', { waitUntil: 'domcontentloaded' });
+      }
+    }
+
     await assertStillAuthenticated(this.page, testInfo, 'after goto /transactions');
     await ensureBizflexCardModalClosed(this.page);
     await expect(this.page).toHaveURL(/transactions/i, { timeout: 45_000 });

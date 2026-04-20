@@ -56,12 +56,20 @@ export async function collectAuthDiagnostics(page: Page): Promise<AuthStateDiagn
     };
   });
 
-  const hasTokenLikeKey = TOKEN_LIKE_KEYS.some(
+  let hasTokenLikeKey = TOKEN_LIKE_KEYS.some(
     (k) =>
       Object.prototype.hasOwnProperty.call(localStorage, k) &&
       typeof localStorage[k] === 'string' &&
       localStorage[k].length > 0
   );
+  if (!hasTokenLikeKey && typeof sessionStorage.user === 'string' && sessionStorage.user.length > 10) {
+    try {
+      const u = JSON.parse(sessionStorage.user) as { accessToken?: unknown };
+      hasTokenLikeKey = typeof u.accessToken === 'string' && u.accessToken.length > 10;
+    } catch {
+      /* ignore */
+    }
+  }
 
   return {
     url,

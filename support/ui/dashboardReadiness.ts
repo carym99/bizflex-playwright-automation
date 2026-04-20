@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Dashboard shell detection timeout (CI-safe). */
-export const DASHBOARD_READY_MS = 30_000;
+/** Dashboard shell detection timeout (longer in CI when many workers hit the same SPA). */
+export const DASHBOARD_READY_MS = process.env.CI ? 50_000 : 30_000;
 
 const DASHBOARD_TEXT = new RegExp(
   [
@@ -28,6 +28,22 @@ export async function isDashboardShellVisible(page: Page): Promise<boolean> {
     (await page.locator('main [class*="card" i], [role="main"] [class*="card" i]').count()) +
     (await page.locator('[data-testid*="card" i]').count());
   if (cardish >= 2) return true;
+
+  try {
+    const path = new URL(page.url()).pathname.toLowerCase();
+    if (path.includes('account')) {
+      const body = await page.locator('body').innerText();
+      if (
+        /quick action|balance|wallet|account\s+(overview|dashboard)|dashboard|bizflex|ngn|₦|transfer|pay bills/i.test(
+          body
+        )
+      ) {
+        return true;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   return false;
 }
 

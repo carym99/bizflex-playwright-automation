@@ -20,7 +20,7 @@ export async function updatePaymentSettings(
   request: APIRequestContext,
   token: string | null,
   multipart: UpdatePaymentSettingsMultipart,
-  options: { contentTypeOverride?: string } = {}
+  options: { contentTypeOverride?: string; timeoutMs?: number } = {}
 ): Promise<{ response: APIResponse; durationMs: number; body: unknown }> {
   const multipartClean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(multipart)) {
@@ -39,6 +39,7 @@ export async function updatePaymentSettings(
     },
     multipart: multipartClean as any,
     failOnStatusCode: false,
+    ...(typeof options.timeoutMs === 'number' ? { timeout: options.timeoutMs } : {}),
   });
   const durationMs = Date.now() - started;
   const body = await response.json().catch(async () => ({ raw: await response.text().catch(() => '') }));
