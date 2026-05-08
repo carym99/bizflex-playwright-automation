@@ -89,13 +89,13 @@ export function readAuthSessionSeed(): AuthSessionSeed | null {
 
 /**
  * When true, first auth attempt injects API tokens + navigates to /account.
- * Default: enabled locally, disabled in CI (SPA often rejects injection → 401 storms).
- * Force on in CI: AUTH_ALLOW_TOKEN_INJECTION=1. Force UI-only everywhere: AUTH_STORAGE_UI_ONLY=1.
+ * Default: disabled (token-injection is flaky on current SPA/router builds).
+ * Force on explicitly: AUTH_ALLOW_TOKEN_INJECTION=1. Force UI-only everywhere: AUTH_STORAGE_UI_ONLY=1.
  */
 function useTokenInjectionAttempt(): boolean {
   if (process.env.AUTH_STORAGE_UI_ONLY === '1') return false;
   if (process.env.AUTH_ALLOW_TOKEN_INJECTION === '1') return true;
-  return process.env.CI !== 'true';
+  return false;
 }
 
 async function injectTokensAndNavigateToAccount(

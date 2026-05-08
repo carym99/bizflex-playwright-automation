@@ -8,6 +8,7 @@ import {
   getLoginSubmitButton,
 } from '../support/ui/loginHelpers';
 import { gotoWithRetry } from '../support/ui/navigation';
+import { isAuthLoginRequest } from '../utils/loginResponse';
 
 /**
  * Minimal UI login + verification — mirrors stable Cypress authSelectors.
@@ -51,7 +52,12 @@ export class LoginPage {
     await emailInput.fill(email);
     await passwordInput.fill(password);
     await expect(submitButton).toBeEnabled({ timeout: submitEnableTimeout });
-    await submitButton.click();
+    const loginResponse = this.page.waitForResponse((response) => isAuthLoginRequest(response.request()), {
+      timeout: accountTimeout,
+    });
+    // Enter submit is more reliable than click on Chakra submit in CI.
+    await passwordInput.press('Enter');
+    await loginResponse;
 
     await expect(this.page).toHaveURL(/\/account/i, { timeout: accountTimeout });
     await this.page.waitForLoadState('domcontentloaded').catch(() => {});

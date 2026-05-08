@@ -29,32 +29,53 @@ export async function collectAuthDiagnostics(page: Page): Promise<AuthStateDiagn
     httpOnly: c.httpOnly,
   }));
 
-  const { localStorage, sessionStorage, localStorageKeys, sessionStorageKeys } = await page.evaluate(() => {
-    const ls: Record<string, string> = {};
-    const lsk: string[] = [];
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const k = window.localStorage.key(i);
-      if (k) {
-        lsk.push(k);
-        ls[k] = window.localStorage.getItem(k) ?? '';
+  let localStorage: Record<string, string> = {};
+  let sessionStorage: Record<string, string> = {};
+  let localStorageKeys: string[] = [];
+  let sessionStorageKeys: string[] = [];
+  try {
+    const snapshot = await page.evaluate(() => {
+      const ls: Record<string, string> = {};
+      const lsk: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k) {
+          lsk.push(k);
+          ls[k] = window.localStorage.getItem(k) ?? '';
+        }
       }
-    }
-    const ss: Record<string, string> = {};
-    const ssk: string[] = [];
-    for (let i = 0; i < window.sessionStorage.length; i++) {
-      const k = window.sessionStorage.key(i);
-      if (k) {
-        ssk.push(k);
-        ss[k] = window.sessionStorage.getItem(k) ?? '';
+      const ss: Record<string, string> = {};
+      const ssk: string[] = [];
+      for (let i = 0; i < window.sessionStorage.length; i++) {
+        const k = window.sessionStorage.key(i);
+        if (k) {
+          ssk.push(k);
+          ss[k] = window.sessionStorage.getItem(k) ?? '';
+        }
       }
+      return {
+        localStorage: ls,
+        sessionStorage: ss,
+        localStorageKeys: lsk,
+        sessionStorageKeys: ssk,
+      };
+    });
+    localStorage = snapshot.localStorage;
+    sessionStorage = snapshot.sessionStorage;
+    localStorageKeys = snapshot.localStorageKeys;
+    sessionStorageKeys = snapshot.sessionStorageKeys;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      /Execution context was destroyed|Target page, context or browser has been closed|Access is denied|SecurityError/i.test(
+        msg
+      )
+    ) {
+      // Navigation/teardown race while collecting diagnostics; keep best-effort cookie + URL snapshot.
+    } else {
+      throw err;
     }
-    return {
-      localStorage: ls,
-      sessionStorage: ss,
-      localStorageKeys: lsk,
-      sessionStorageKeys: ssk,
-    };
-  });
+  }
 
   let hasTokenLikeKey = TOKEN_LIKE_KEYS.some(
     (k) =>
@@ -124,9 +145,16 @@ export async function attachAuthFailureArtifacts(
     body: Buffer.from(JSON.stringify(redactSecrets(diag), null, 2), 'utf8'),
     contentType: 'application/json',
   });
-  await testInfo.attach('auth-failure-screenshot.png', {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: 'image/png',
-  });
+  try {
+    await testInfo.attach('auth-failure-screenshot.png', {
+      body: await page.screenshot({ fullPage: true, timeout: 8_000 }),
+      contentType: 'image/png',
+    });
+  } catch (err) {
+    console.warn(
+      '[auth-debug] unable to attach failure screenshot:',
+      err instanceof Error ? err.message : String(err)
+    );
+  }
   return diag;
 }

@@ -16,7 +16,9 @@ import {
   getBearerTokenFromPage,
   getRefreshTokenFromPage,
   mirrorSessionUserTokensToLocalStorage,
+  pathnameIsLoginRoute,
 } from '../../support/auth/browserAuthSession';
+import { gotoWithRetry } from '../../support/ui/navigation';
 import { installAuthSessionSeedInitScript } from '../../support/ui/prepareAuthenticatedPage';
 
 setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo) => {
@@ -43,7 +45,7 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
     page = await context.newPage();
     await installAuthSessionSeedInitScript(page);
 
-    await page.goto('/account', {
+    await gotoWithRetry(page, '/account', {
       waitUntil: 'domcontentloaded',
       timeout: process.env.CI ? 120_000 : 90_000,
     });
@@ -56,12 +58,33 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
 
     await expect(page).toHaveURL(/\/account/i, { timeout: 60_000 });
 
-    await mirrorSessionUserTokensToLocalStorage(page);
-    const accessToken = await getBearerTokenFromPage(page);
-    const refreshToken = await getRefreshTokenFromPage(page);
-    expect(accessToken, 'accessToken must exist in browser storage after /account').toBeTruthy();
-    expect(refreshToken, 'refreshToken must exist in browser storage after /account').toBeTruthy();
-
+    // Under heavy parallel load, auth hydration can lag behind initial /account render.
+    // For setup we require browser-auth state (not a repeated profile API probe).
+    await expect
+      .poll(
+        async () => {
+          const hasBearer = Boolean(await getBearerTokenFromPage(page));
+          const onLogin = pathnameIsLoginRoute(page);
+          return { hasBearer, onLogin };
+        },
+        { timeout: 60_000 }
+      )
+      .toMatchObject({ hasBearer: true, onLogin: false });
+    await expect
+      .poll(
+        async () => {
+          await mirrorSessionUserTokensToLocalStorage(page);
+          return {
+            accessToken: await getBearerTokenFromPage(page),
+            refreshToken: await getRefreshTokenFromPage(page),
+          };
+        },
+        { timeout: 25_000 }
+      )
+      .toMatchObject({
+        accessToken: expect.any(String),
+        refreshToken: expect.any(String),
+      });
     await context.storageState({ path: storagePath });
     await duplicateCanonicalAuthStorageToWorkerFiles();
   } catch (err) {

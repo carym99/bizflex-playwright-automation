@@ -1,5 +1,9 @@
-import { type Page, type TestInfo, expect } from '@playwright/test';
-import { getBearerTokenFromPage, mirrorSessionUserTokensToLocalStorage } from '../auth/browserAuthSession';
+import { type Page, type TestInfo } from '@playwright/test';
+import {
+  getBearerTokenFromPage,
+  mirrorSessionUserTokensToLocalStorage,
+  waitForBearerTokenInPage,
+} from '../auth/browserAuthSession';
 import { assertAccessTokenPresent, failIfLoginRedirect } from './assertStillAuthenticated';
 import {
   attemptUiLoginRecovery,
@@ -41,15 +45,22 @@ async function hasBrowserTokens(page: Page): Promise<boolean> {
 }
 
 async function assertHasBrowserTokens(page: Page, phase: string): Promise<void> {
-  /** Keep headroom for dashboard + assertions within typical 180–240s describe budgets. */
-  const tokenWaitMs = process.env.CI ? 55_000 : 45_000;
+  /** Headroom for Netlify + parallel workers; `waitForFunction` survives SPA navigations better than evaluate polls. */
+  const tokenWaitMs = process.env.CI ? 90_000 : 55_000;
   try {
-    await expect
-      .poll(async () => (await getBearerTokenFromPage(page)) ?? '', {
-        timeout: tokenWaitMs,
-      })
-      .not.toBe('');
+    await waitForBearerTokenInPage(page, tokenWaitMs);
   } catch {
+    // Last-resort nudge: tokens may hydrate only after a second navigation to /account.
+    if (!pathnameLooksLikeLogin(page) && getPagePathname(page).includes('account')) {
+      await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' }).catch(() => {});
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      try {
+        await waitForBearerTokenInPage(page, process.env.CI ? 35_000 : 20_000);
+        return;
+      } catch {
+        /* fall through to debug + throw */
+      }
+    }
     await logBrowserAuthDebug(page, `${phase}-missing-tokens`);
     throw new Error(
       `${phase}: expected bearer token in localStorage or sessionStorage.user after navigation`
@@ -143,9 +154,6 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
   await page.waitForURL(/\/account|\/login/i, { timeout: 45_000 }).catch(() => {});
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
-  await assertHasBrowserTokens(page, 'prepareAuthenticatedPage');
-  await mirrorSessionUserTokensToLocalStorage(page);
-
   const pathAfterTokens = getPagePathname(page);
   const alreadyOnAccountShell =
     pathAfterTokens.includes('account') && !pathnameLooksLikeLogin(page);
@@ -159,6 +167,9 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
       }
     });
   }
+
+  await assertHasBrowserTokens(page, 'prepareAuthenticatedPage');
+  await mirrorSessionUserTokensToLocalStorage(page);
 
   await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after stable route');
   await handleSessionTimeout(page);

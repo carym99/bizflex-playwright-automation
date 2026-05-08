@@ -9,6 +9,16 @@ import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedP
 import { assertStillAuthenticated } from '../../support/ui/assertStillAuthenticated';
 import { buildPaymentLinkName } from '../shared/factories/paymentLink.factory';
 
+function buildFillParams(linkName: string, description: string): FillGenerateLinkFormParams {
+  const envEmail = process.env.TEST_EMAIL?.trim();
+  return {
+    name: linkName,
+    amount: '1000',
+    description,
+    ...(envEmail ? { email: envEmail } : {}),
+  };
+}
+
 async function expectLinkNameVisibleWithArtifacts(page: Page, testInfo: TestInfo, linkName: string): Promise<void> {
   try {
     await page.waitForLoadState('domcontentloaded');
@@ -57,14 +67,7 @@ test.describe('@smoke Payment link create and verify', () => {
       await paymentLinkPage.verifyPublishButtonDisabled();
       await paymentLinkPage.verifySaveDraftButtonDisabled();
 
-      const fillParams: FillGenerateLinkFormParams = {
-        name: linkName,
-        amount: '1000',
-        description,
-      };
-      if (process.env.TEST_EMAIL) {
-        fillParams.email = process.env.TEST_EMAIL;
-      }
+      const fillParams = buildFillParams(linkName, description);
       await paymentLinkPage.fillGenerateLinkForm(fillParams);
       await expect(authenticatedPage.getByRole('button', { name: /Publish Link/i })).toBeEnabled();
       await paymentLinkPage.publishPaymentLink();
@@ -83,3 +86,4 @@ test.describe('@smoke Payment link create and verify', () => {
     });
   });
 });
+ 

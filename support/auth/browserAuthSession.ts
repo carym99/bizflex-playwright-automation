@@ -14,6 +14,38 @@ export function throwIfPageClosed(page: Page, phase: string): void {
  * Reads a bearer token from storage the way the BizFlex SPA does in current builds:
  * top-level `localStorage` keys first, then `sessionStorage.user` JSON (`accessToken`).
  */
+/**
+ * Polls inside the page until a usable bearer appears in storage. Prefer this over repeated
+ * `page.evaluate` during SPA navigations: Playwright re-runs the predicate after `domcontentloaded`
+ * when the execution context is replaced, so reads are less flaky than ad-hoc `evaluate` loops.
+ */
+export async function waitForBearerTokenInPage(page: Page, timeoutMs: number): Promise<void> {
+  throwIfPageClosed(page, 'waitForBearerTokenInPage');
+  await page.waitForFunction(
+    () => {
+      const fromLs =
+        window.localStorage.getItem('accessToken') ??
+        window.localStorage.getItem('token') ??
+        window.localStorage.getItem('authToken');
+      if (fromLs && fromLs.length >= 10) {
+        return true;
+      }
+      const raw = window.sessionStorage.getItem('user');
+      if (!raw) {
+        return false;
+      }
+      try {
+        const o = JSON.parse(raw) as { accessToken?: unknown };
+        const at = o.accessToken;
+        return typeof at === 'string' && at.length >= 10;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: timeoutMs }
+  );
+}
+
 export async function getBearerTokenFromPage(page: Page): Promise<string | null> {
   throwIfPageClosed(page, 'getBearerTokenFromPage');
   try {
@@ -42,7 +74,11 @@ export async function getBearerTokenFromPage(page: Page): Promise<string | null>
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (/Execution context was destroyed|Target page, context or browser has been closed/i.test(msg)) {
+    if (
+      /Execution context was destroyed|Target page, context or browser has been closed|navigation/i.test(
+        msg
+      )
+    ) {
       return null;
     }
     throw err;
@@ -87,25 +123,33 @@ export async function getRefreshTokenFromPage(page: Page): Promise<string | null
  */
 export async function mirrorSessionUserTokensToLocalStorage(page: Page): Promise<void> {
   throwIfPageClosed(page, 'mirrorSessionUserTokensToLocalStorage');
-  await page.evaluate(() => {
-    const raw = window.sessionStorage.getItem('user');
-    if (!raw) {
+  try {
+    await page.evaluate(() => {
+      const raw = window.sessionStorage.getItem('user');
+      if (!raw) {
+        return;
+      }
+      try {
+        const o = JSON.parse(raw) as { accessToken?: string; refreshToken?: string };
+        if (typeof o.accessToken === 'string' && o.accessToken.length > 0) {
+          window.localStorage.setItem('accessToken', o.accessToken);
+          window.localStorage.setItem('token', o.accessToken);
+          window.localStorage.setItem('authToken', o.accessToken);
+        }
+        if (typeof o.refreshToken === 'string' && o.refreshToken.length > 0) {
+          window.localStorage.setItem('refreshToken', o.refreshToken);
+        }
+      } catch {
+        /* ignore */
+      }
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/Execution context was destroyed|Target page, context or browser has been closed/i.test(msg)) {
       return;
     }
-    try {
-      const o = JSON.parse(raw) as { accessToken?: string; refreshToken?: string };
-      if (typeof o.accessToken === 'string' && o.accessToken.length > 0) {
-        window.localStorage.setItem('accessToken', o.accessToken);
-        window.localStorage.setItem('token', o.accessToken);
-        window.localStorage.setItem('authToken', o.accessToken);
-      }
-      if (typeof o.refreshToken === 'string' && o.refreshToken.length > 0) {
-        window.localStorage.setItem('refreshToken', o.refreshToken);
-      }
-    } catch {
-      /* ignore */
-    }
-  });
+    throw err;
+  }
 }
 
 /**
@@ -148,6 +192,10 @@ export async function isAuthenticated(page: Page): Promise<boolean> {
 export type WaitUntilAuthenticatedOptions = {
   /** Label for error messages (e.g. post-ui-login). */
   phase?: string;
+  /** Optional timeout override in ms. */
+  timeoutMs?: number;
+  /** Optional poll interval override in ms. */
+  intervalMs?: number;
 };
 
 /**
@@ -159,8 +207,8 @@ export async function waitUntilAuthenticated(
   options: WaitUntilAuthenticatedOptions = {}
 ): Promise<void> {
   const phase = options.phase ?? 'waitUntilAuthenticated';
-  const maxMs = process.env.CI ? 50_000 : 28_000;
-  const intervalMs = process.env.CI ? 900 : 500;
+  const maxMs = options.timeoutMs ?? (process.env.CI ? 50_000 : 28_000);
+  const intervalMs = options.intervalMs ?? (process.env.CI ? 900 : 500);
   const deadline = Date.now() + maxMs;
 
   while (Date.now() < deadline) {

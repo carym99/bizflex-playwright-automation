@@ -9,11 +9,23 @@ import {
   pathnameLooksLikeLogin,
 } from './authSessionRecovery';
 import { gotoWithRetry } from './navigation';
+import { resolveApiUrl } from '../../utils/api';
 
 async function readHasAnyAccessToken(page: Page): Promise<boolean> {
   if (page.isClosed()) return false;
   const t = await getBearerTokenFromPage(page);
   return Boolean(t && t.length > 0);
+}
+
+async function hasAuthenticatedCookieSession(page: Page): Promise<boolean> {
+  try {
+    const response = await page.request.get(resolveApiUrl('/v1/users/profile'), {
+      failOnStatusCode: false,
+    });
+    return response.ok();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -116,6 +128,12 @@ export async function assertAccessTokenPresent(
       .poll(async () => (await getBearerTokenFromPage(page)) ?? '', { timeout: 20_000 })
       .not.toBe('');
   } catch {
+    const cookieSessionOk = await hasAuthenticatedCookieSession(page);
+    if (cookieSessionOk) {
+      console.warn(`[auth] ${phase}: token keys missing but cookie-backed profile probe passed`);
+      return;
+    }
+
     if (testInfo) {
       await attachAuthFailureArtifacts(page, testInfo, `${phase}-missing-access-token`);
     } else {

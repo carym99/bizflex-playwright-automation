@@ -21,8 +21,9 @@ function loginButton(page: Page) {
 }
 
 test.describe('@auth User Login UI', () => {
+  test.describe.configure({ timeout: 120_000 });
+
   test('shows validation message for invalid email format', async ({ page }) => {
-    test.setTimeout(60_000);
     await test.step('Open login and fill invalid email', async () => {
       await gotoWithRetry(page, '/login', { waitUntil: 'domcontentloaded' });
       await assertLoginFormReady(page);
@@ -84,11 +85,18 @@ test.describe('@auth User Login UI', () => {
     await assertLoginFormReady(page);
     const suspendedEmail = process.env.SUSPENDED_USER_EMAIL || getUiEmail();
     await getLoginEmailInput(page).fill(suspendedEmail);
-    await getLoginPasswordInput(page).fill(getValidPassword());
+    const passwordInput = getLoginPasswordInput(page);
+    await passwordInput.fill(getValidPassword());
     await expect(loginButton(page)).toBeEnabled();
-    await loginButton(page).click();
+    const loginPost = page.waitForResponse(
+      (response) => isAuthLoginRequest(response.request()) && response.status() === 403,
+      { timeout: 45_000 }
+    );
+    // Form submit via Enter avoids occasional Playwright hangs on Chakra login button hit-testing.
+    await passwordInput.press('Enter');
+    await loginPost;
 
-    await expect(page.getByText(suspendedAccountMessage)).toBeVisible();
+    await expect(page.getByText(suspendedAccountMessage)).toBeVisible({ timeout: 30_000 });
     await expect(page).toHaveURL(/\/login/i);
   });
 

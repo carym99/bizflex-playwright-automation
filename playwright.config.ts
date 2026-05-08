@@ -92,6 +92,7 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['setup'],
+      workers: process.env.CI ? 2 : undefined,
       testMatch: ['smoke/**/*.spec.ts', 'regression/**/*.spec.ts'],
       testIgnore: ['**/*.api.spec.ts', '**/setup/**'],
       use: {

@@ -10,7 +10,7 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const defaultNavigationTimeoutMs = process.env.CI ? 90_000 : 45_000;
+const defaultNavigationTimeoutMs = process.env.CI ? 120_000 : 60_000;
 
 /**
  * CI-safe goto helper: retries transient navigation failures before surfacing.
@@ -24,7 +24,7 @@ export async function gotoWithRetry(
     timeout?: number;
   } = {}
 ): Promise<void> {
-  const attempts = process.env.CI ? 3 : 2;
+  const attempts = process.env.CI ? 5 : 4;
   const timeout = options.timeout ?? defaultNavigationTimeoutMs;
   let lastError: unknown;
   for (let i = 1; i <= attempts; i++) {

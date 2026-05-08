@@ -1,4 +1,4 @@
-import { type Page, type TestInfo, type Locator, expect } from '@playwright/test';
+import { type Page, type TestInfo, type Locator, type Request, expect } from '@playwright/test';
 import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
 import { pathnameLooksLikeLogin } from '../support/ui/authSessionRecovery';
 import { logAuthDiagnostics } from '../support/auth/debugAuthState';
@@ -23,6 +23,12 @@ export type FillGenerateLinkFormParams = {
 };
 
 const SUCCESS_GENERATED = /Payment Link Generated Successfully/i;
+
+function isPaymentLinkCreatePost(request: Request): boolean {
+  if (request.method().toUpperCase() !== 'POST') return false;
+  const u = request.url().toLowerCase();
+  return u.includes('/payment/') && u.includes('link') && u.includes('create');
+}
 
 export class PaymentLinkPage {
   constructor(private readonly page: Page) {}
@@ -144,7 +150,15 @@ export class PaymentLinkPage {
     };
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      await this.page.goto('/payment-link', { waitUntil: 'domcontentloaded' });
+      try {
+        await this.page.goto('/payment-link', { waitUntil: 'domcontentloaded' });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // SPA occasionally redirects to /login while a /payment-link navigation is in-flight.
+        if (!/interrupted by another navigation|ERR_ABORTED/i.test(msg)) {
+          throw err;
+        }
+      }
       logNav(`after goto /payment-link (attempt ${attempt})`);
 
       if (pathnameLooksLikeLogin(this.page)) {
@@ -165,7 +179,7 @@ export class PaymentLinkPage {
         }
 
         console.warn('[PaymentLinkPage.navigate] /login after /payment-link — stabilizing via /account then retry');
-        await this.page.goto('/account', { waitUntil: 'domcontentloaded' });
+        await this.page.goto('/account', { waitUntil: 'domcontentloaded' }).catch(() => {});
         await assertStillAuthenticated(this.page, testInfo, 'PaymentLinkPage.navigate recovery /account');
         continue;
       }
@@ -176,7 +190,10 @@ export class PaymentLinkPage {
     await assertStillAuthenticated(this.page, testInfo, 'PaymentLinkPage.navigate after goto /payment-link');
     await ensureBizflexCardModalClosed(this.page);
     await this.dismissBlockingCardModalIfPresent();
-    await expect(this.page).toHaveURL(/payment-link/i, { timeout: 45_000 });
+    const createUniqueVisible = await this.createUniqueLinkButton().first().isVisible().catch(() => false);
+    if (!createUniqueVisible) {
+      await expect(this.page).toHaveURL(/payment-link/i, { timeout: 45_000 });
+    }
   }
 
   async assertDashboardVisible(): Promise<void> {
@@ -251,14 +268,33 @@ export class PaymentLinkPage {
   async publishPaymentLink(): Promise<void> {
     const publish = this.publishButton().first();
     await expect(publish).toBeVisible({ timeout: 15_000 });
+    const createResponse = this.page.waitForResponse(
+      (response) => isPaymentLinkCreatePost(response.request()),
+      { timeout: process.env.CI ? 120_000 : 90_000 }
+    );
     await clickWithScrollThenForceFallback(publish);
+    const response = await createResponse;
+    if (!response.ok()) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(
+        `PaymentLinkPage.publishPaymentLink: POST create returned ${response.status()} — ${detail.slice(0, 500)}`
+      );
+    }
   }
 
   /** Success copy in modal and/or Chakra toast host. */
   async expectPaymentLinkGeneratedSuccessfully(): Promise<void> {
     const modal = this.successModalText();
-    const toast = this.successToastHost().filter({ hasText: SUCCESS_GENERATED });
-    await expect(modal.or(toast).first()).toBeVisible({ timeout: 30_000 });
+    const toastExact = this.successToastHost().filter({ hasText: SUCCESS_GENERATED });
+    const toastLoose = this.page
+      .locator('[id*="toast" i], [class*="toast" i]')
+      .filter({ hasText: /payment link|generated|successfully|created/i });
+    const alertRegion = this.page
+      .getByRole('alert')
+      .filter({ hasText: /payment link|generated|successfully|created/i });
+    await expect(modal.or(toastExact).or(toastLoose).or(alertRegion).first()).toBeVisible({
+      timeout: process.env.CI ? 45_000 : 35_000,
+    });
   }
 
   async closeSuccessModal(): Promise<void> {

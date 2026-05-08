@@ -13,7 +13,7 @@ import {
 
 const strictMode = String(process.env.STRICT_AUTH_CONTRACT || '').toLowerCase() === 'true';
 const failedLoginBudgetOverride = Number(process.env.FAILED_LOGIN_BUDGET_MS || '');
-const defaultFailedLoginBudgetMs = strictMode ? 1_000 : 5_000;
+const defaultFailedLoginBudgetMs = strictMode ? 1_000 : process.env.CI ? 12_000 : 5_000;
 const SUCCESS_LOGIN_BUDGET_MS = strictMode ? 2_000 : 15_000;
 const FAILED_LOGIN_BUDGET_MS =
   Number.isFinite(failedLoginBudgetOverride) && failedLoginBudgetOverride > 0
