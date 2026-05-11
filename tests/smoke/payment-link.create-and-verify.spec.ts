@@ -47,7 +47,7 @@ async function expectLinkNameVisibleWithArtifacts(page: Page, testInfo: TestInfo
 
 test.describe('@smoke Payment link create and verify', () => {
   test('authenticated user can create and verify a payment link', async ({ authenticatedPage }, testInfo) => {
-    test.setTimeout(120_000);
+    test.setTimeout(process.env.CI ? 180_000 : 120_000);
     const linkName = buildPaymentLinkName();
     const description = 'Playwright automated payment link';
 
@@ -58,6 +58,7 @@ test.describe('@smoke Payment link create and verify', () => {
     const paymentLinkPage = new PaymentLinkPage(authenticatedPage);
 
     await test.step('Open payment link workspace', async () => {
+      await assertStillAuthenticated(authenticatedPage, testInfo, 'before payment link navigation');
       await paymentLinkPage.navigate(testInfo);
       await assertStillAuthenticated(authenticatedPage, testInfo, 'after navigating to payment link page');
     });

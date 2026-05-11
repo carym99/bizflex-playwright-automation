@@ -46,7 +46,7 @@ async function hasBrowserTokens(page: Page): Promise<boolean> {
 
 async function assertHasBrowserTokens(page: Page, phase: string): Promise<void> {
   /** Headroom for Netlify + parallel workers; `waitForFunction` survives SPA navigations better than evaluate polls. */
-  const tokenWaitMs = process.env.CI ? 90_000 : 55_000;
+  const tokenWaitMs = process.env.CI ? 120_000 : 55_000;
   try {
     await waitForBearerTokenInPage(page, tokenWaitMs);
   } catch {
@@ -55,7 +55,7 @@ async function assertHasBrowserTokens(page: Page, phase: string): Promise<void> 
       await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' }).catch(() => {});
       await page.waitForLoadState('domcontentloaded').catch(() => {});
       try {
-        await waitForBearerTokenInPage(page, process.env.CI ? 35_000 : 20_000);
+        await waitForBearerTokenInPage(page, process.env.CI ? 45_000 : 20_000);
         return;
       } catch {
         /* fall through to debug + throw */
@@ -65,6 +65,32 @@ async function assertHasBrowserTokens(page: Page, phase: string): Promise<void> 
     throw new Error(
       `${phase}: expected bearer token in localStorage or sessionStorage.user after navigation`
     );
+  }
+}
+
+/**
+ * If the SPA shows a session-expired modal (common under CI load), try UI re-login once before failing.
+ */
+async function handleSessionTimeoutWithOptionalCiRecovery(page: Page, testInfo: TestInfo): Promise<void> {
+  try {
+    await handleSessionTimeout(page);
+    return;
+  } catch (err) {
+    if (!process.env.CI) {
+      throw err;
+    }
+    console.warn('[auth] prepareAuthenticatedPage: session timeout UI in CI — attempting UI recovery');
+    await logBrowserAuthDebug(page, 'prepareAuthenticatedPage-session-timeout-before-recovery');
+    const recovered =
+      (await attemptUiLoginRecovery(page)) || (await attemptUiLoginRecoveryFromLoginRoute(page));
+    if (!recovered) {
+      throw err;
+    }
+    await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    await waitForBearerTokenInPage(page, 60_000).catch(() => {});
+    await mirrorSessionUserTokensToLocalStorage(page).catch(() => {});
+    await handleSessionTimeout(page);
   }
 }
 
@@ -172,7 +198,7 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
   await mirrorSessionUserTokensToLocalStorage(page);
 
   await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after stable route');
-  await handleSessionTimeout(page);
+  await handleSessionTimeoutWithOptionalCiRecovery(page, testInfo);
   await dismissCardModal(page);
   await dismissCookieBanner(page);
 

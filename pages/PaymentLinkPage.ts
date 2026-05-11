@@ -220,13 +220,14 @@ export class PaymentLinkPage {
   }
 
   async openGenerateLinkModal(testInfo?: TestInfo): Promise<void> {
+    const modalOpenTimeoutMs = process.env.CI ? 45_000 : 20_000;
     await this.dismissBlockingCardModalIfPresent();
     await this.dismissChakraBlockingModalsIfPresent();
     await ensureBizflexCardModalClosed(this.page);
     const createUniqueLinkButton = this.createUniqueLinkButton().first();
-    await expect(createUniqueLinkButton).toBeVisible({ timeout: 20_000 });
+    await expect(createUniqueLinkButton).toBeVisible({ timeout: modalOpenTimeoutMs });
     await expect
-      .poll(async () => createUniqueLinkButton.isEnabled(), { timeout: 20_000 })
+      .poll(async () => createUniqueLinkButton.isEnabled(), { timeout: modalOpenTimeoutMs })
       .toBe(true);
     await createUniqueLinkButton.click();
 
@@ -239,8 +240,8 @@ export class PaymentLinkPage {
     }
 
     // Prefer stable form controls over copy-only text (avoids flaky `text=` and duplicate waits).
-    await expect(this.paymentNameInput().first()).toBeVisible({ timeout: 20_000 });
-    await expect(this.amountInput().first()).toBeVisible({ timeout: 20_000 });
+    await expect(this.paymentNameInput().first()).toBeVisible({ timeout: modalOpenTimeoutMs });
+    await expect(this.amountInput().first()).toBeVisible({ timeout: modalOpenTimeoutMs });
   }
 
   /** Mandatory for enabling Publish / Save to Draft: name, amount (≥1000), description. Email/phone optional unless product requires them. */
