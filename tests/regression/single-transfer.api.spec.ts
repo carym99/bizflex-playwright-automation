@@ -35,6 +35,13 @@ function isAccountFrozen(status: number, body: unknown): boolean {
   return msg.toLowerCase().includes('account is frozen');
 }
 
+function isAccountPnd(status: number, body: unknown): boolean {
+  if (status !== 400 && status !== 403) return false;
+  const msg = typeof (body as any)?.message === 'string' ? String((body as any).message) : '';
+  const lower = msg.toLowerCase();
+  return lower.includes('pnd') || lower.includes('post not debit');
+}
+
 function baseTransferPayload(overrides: Partial<SingleTransferPayload> = {}): SingleTransferPayload {
   return {
     accountId: Number(getTransferAccountId()),
@@ -92,6 +99,10 @@ test.describe('@regression POST /v1/account/single-transfer', () => {
       isAccountFrozen(response.status(), body),
       `Transfer account frozen in environment: ${JSON.stringify(body).slice(0, 200)}`
     );
+    test.skip(
+      isAccountPnd(response.status(), body),
+      `Transfer account on PND in environment: ${JSON.stringify(body).slice(0, 200)}`
+    );
 
     expect(response.status(), `Unexpected status: ${JSON.stringify(body).slice(0, 350)}`).toBe(200);
     expectWithinBudget(durationMs, TRANSFER_BUDGET_MS, 'single transfer');
@@ -105,6 +116,10 @@ test.describe('@regression POST /v1/account/single-transfer', () => {
     test.skip(
       isAccountFrozen(response.status(), body),
       `Transfer account frozen in environment: ${JSON.stringify(body).slice(0, 200)}`
+    );
+    test.skip(
+      isAccountPnd(response.status(), body),
+      `Transfer account on PND in environment: ${JSON.stringify(body).slice(0, 200)}`
     );
     expect([200, 201]).toContain(response.status());
     assertNoSensitiveFields(body);

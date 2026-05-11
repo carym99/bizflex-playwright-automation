@@ -74,6 +74,24 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Refresh authenticated storage (same as npm test pre-step)
+        env:
+          CI: true
+          API_URL: ${{ secrets.API_URL }}
+          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+          TEST_EMAIL: ${{ env.TEST_EMAIL }}
+          TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
+          VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
+          VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
+          UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
+          UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
+        shell: bash
+        run: |
+          export API_URL="${API_URL:-https://bizflex.onrender.com}"
+          export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
+          export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
+          npm run auth
+
       - name: Run Playwright Tests
         env:
           CI: true

@@ -1,7 +1,7 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 import { getBearerTokenFromPage, mirrorSessionUserTokensToLocalStorage } from '../auth/browserAuthSession';
 import { attachAuthFailureArtifacts, logAuthDiagnostics } from '../auth/debugAuthState';
-import { handleSessionTimeout } from './handleSessionTimeout';
+import { handleSessionTimeoutWithOptionalCiRecovery } from './sessionTimeoutCiRecovery';
 import {
   attemptUiLoginRecovery,
   attemptUiLoginRecoveryFromLoginRoute,
@@ -206,7 +206,7 @@ export async function assertStillAuthenticated(
   context = 'assertStillAuthenticated'
 ): Promise<void> {
   if (!pathnameLooksLikeLogin(page)) {
-    await handleSessionTimeout(page);
+    await handleSessionTimeoutWithOptionalCiRecovery(page, testInfo, context);
   }
   await stabilizeAuthHydration(page, testInfo, context);
   await failIfLoginRedirect(page, testInfo, context);

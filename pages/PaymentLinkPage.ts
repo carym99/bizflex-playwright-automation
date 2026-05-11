@@ -55,9 +55,12 @@ export class PaymentLinkPage {
   paymentNameInput(): Locator {
     return this.page
       .locator('input[placeholder="Enter Name"]')
-      .or(this.page.getByPlaceholder(/Enter Name|Payment Name|Link Name/i))
+      .or(this.page.getByPlaceholder(/Enter Name|Payment Name|Link Name|name/i))
       .or(this.page.getByLabel(/Payment Name|Name|Title/i))
-      .or(this.page.locator('input[name*="name" i]'));
+      .or(this.page.locator('input[type="text"][name*="name" i]'))
+      .or(this.page.locator('input[id*="name" i]'))
+      .or(this.page.locator('input[name*="name" i]'))
+      .first();
   }
 
   amountInput(): Locator {
