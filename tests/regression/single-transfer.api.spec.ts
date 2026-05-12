@@ -4,7 +4,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { assertNoSensitiveFields } from '../../helpers/responseValidator';
-import { loginForAccessToken } from '../../helpers/paymentLink';
+import { loginForTransferAccessToken } from '../../helpers/transfer';
 import { createSingleTransfer, maskAccountNumber, type SingleTransferPayload } from '../../helpers/transfer';
 import {
   getTransferAccountId,
@@ -74,11 +74,11 @@ async function createTransferWithFreshAuthRetry(
   request: Parameters<typeof test>[0] extends any ? any : never,
   payload: Partial<SingleTransferPayload>
 ) {
-  let token = await loginForAccessToken(request);
+  let token = await loginForTransferAccessToken(request);
   let res = await createSingleTransfer(request, token, payload);
   if (isSessionExpired401(res.response.status(), res.body)) {
     console.warn('[single-transfer] 401 session expired; re-authenticating and retrying once');
-    token = await loginForAccessToken(request);
+    token = await loginForTransferAccessToken(request);
     res = await createSingleTransfer(request, token, payload);
   }
   return res;

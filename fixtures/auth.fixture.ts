@@ -17,6 +17,29 @@ export function getValidPassword(): string {
   return password;
 }
 
+/**
+ * Email used to obtain a bearer token for `single-transfer` API tests.
+ * Prefers `VALID_USER_EMAIL` when set (typical non-PND wallet in `.env.local`), otherwise same as {@link getValidEmail}.
+ */
+export function getTransferAuthEmail(): string {
+  const valid = process.env.VALID_USER_EMAIL?.trim();
+  if (valid) return valid;
+  return getValidEmail();
+}
+
+/**
+ * Password paired with {@link getTransferAuthEmail}: when that email is `VALID_USER_EMAIL`, prefer `VALID_USER_PASSWORD`.
+ */
+export function getTransferAuthPassword(): string {
+  const validEmail = process.env.VALID_USER_EMAIL?.trim();
+  const transferEmail = getTransferAuthEmail();
+  if (validEmail && transferEmail === validEmail) {
+    const vp = process.env.VALID_USER_PASSWORD?.trim();
+    if (vp) return vp;
+  }
+  return getValidPassword();
+}
+
 export function getLoginPath(): string {
   return process.env.AUTH_API_LOGIN_PATH || '/v1/auth/login';
 }

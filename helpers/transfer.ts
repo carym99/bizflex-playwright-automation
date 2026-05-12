@@ -1,5 +1,6 @@
-import type { APIRequestContext, APIResponse } from '@playwright/test';
-import { resolveApiUrl } from '../utils/api';
+import { expect, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { extractTokenFromLoginBody, resolveApiUrl } from '../utils/api';
+import { getLoginPath, getTransferAuthEmail, getTransferAuthPassword } from '../fixtures/auth.fixture';
 
 export type SingleTransferPayload = {
   accountId: number;
@@ -22,6 +23,22 @@ export function maskAccountNumber(accountNumber: string): string {
   if (!accountNumber) return '****';
   const last4 = accountNumber.slice(-4);
   return `******${last4}`;
+}
+
+/** Login for transfer API tests — prefers `VALID_USER_EMAIL` / `VALID_USER_PASSWORD` when set (see `auth.fixture`). */
+export async function loginForTransferAccessToken(request: APIRequestContext): Promise<string> {
+  const email = getTransferAuthEmail();
+  const password = getTransferAuthPassword();
+  const response = await request.post(resolveApiUrl(getLoginPath()), {
+    data: { email, password },
+    headers: { Accept: '*/*', 'Content-Type': 'application/json' },
+    failOnStatusCode: false,
+  });
+  expect(response.status(), 'Login must succeed to obtain bearer token for single-transfer').toBe(200);
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const token = extractTokenFromLoginBody(body);
+  expect(token, 'Login response missing access token').toBeTruthy();
+  return String(token);
 }
 
 export async function createSingleTransfer(

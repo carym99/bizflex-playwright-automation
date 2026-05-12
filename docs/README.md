@@ -32,8 +32,9 @@ The verify step fails fast with separate error messages if `TEST_EMAIL` is missi
 
 ## Transfer API Environment Setup
 
-`tests/regression/single-transfer.api.spec.ts` reads transfer secrets from env-backed fixture helpers.  
-Set these in `.env` (local) and CI secret vars:
+`tests/regression/single-transfer.api.spec.ts` authenticates with **`loginForTransferAccessToken`**: it uses **`VALID_USER_EMAIL` first** when set (then `VALID_USER_PASSWORD` if set, otherwise `TEST_PASSWORD`), so the debiting user matches your non-PND account in `.env.local`. If `VALID_USER_EMAIL` is unset, it falls back to the same rules as other API helpers (`getValidEmail` / `TEST_PASSWORD`).
+
+Set transfer payload and pin in `.env` / `.env.local` and CI secret vars:
 
 - `TRANSFER_ACCOUNT_ID`
 - `TRANSFER_TRANSACTION_PIN`
