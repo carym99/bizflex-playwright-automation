@@ -29,6 +29,7 @@ The verify step fails fast with separate error messages if `TEST_EMAIL` is missi
 - `API_URL` (workflow defaults to `https://bizflex.onrender.com` if unset)
 - `PLAYWRIGHT_BASE_URL` (defaults to `https://bizflex-app.netlify.app` if unset)
 - `VALID_USER_EMAIL`, `VALID_USER_PASSWORD`, `UI_USER_EMAIL`, `UI_USER_PASSWORD`, `MFA_USER_EMAIL`, `MFA_USER_PASSWORD` as needed for specific specs
+- `E2E_DEFAULT_ACCOUNT_ID` — when the app lands on [`/select-account`](https://bizflex-app.netlify.app/select-account), Playwright picks that row if `data-testid="select-account-option-<id>"` (or `account-option-<id>`) exists; otherwise extend `support/ui/resolveSelectAccount.ts`
 
 ## Transfer API Environment Setup
 

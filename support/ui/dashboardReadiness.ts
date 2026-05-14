@@ -1,4 +1,8 @@
 import { expect, type Page } from '@playwright/test';
+import {
+  pathnameLooksLikeAccountDashboardPath,
+  pathnameLooksLikeSelectAccountPath,
+} from './accountRoutes';
 
 /** Dashboard shell detection timeout (longer in CI when many workers hit the same SPA). */
 export const DASHBOARD_READY_MS = process.env.CI ? 80_000 : 35_000;
@@ -23,6 +27,12 @@ export async function isDashboardShellVisible(page: Page): Promise<boolean> {
   if (page.isClosed()) return false;
   const currentUrl = page.url().toLowerCase();
   if (/\/login(\/|$)/.test(currentUrl)) return false;
+  try {
+    const pathEarly = new URL(page.url()).pathname.trim().toLowerCase();
+    if (pathnameLooksLikeSelectAccountPath(pathEarly)) return false;
+  } catch {
+    /* ignore */
+  }
 
   if ((await page.getByText(DASHBOARD_TEXT).count()) > 0) return true;
   if ((await page.getByPlaceholder(/search/i).count()) > 0) return true;
@@ -35,8 +45,8 @@ export async function isDashboardShellVisible(page: Page): Promise<boolean> {
   if (cardish >= 2) return true;
 
   try {
-    const path = new URL(page.url()).pathname.toLowerCase();
-    if (path.includes('account')) {
+    const path = new URL(page.url()).pathname.trim().toLowerCase();
+    if (pathnameLooksLikeAccountDashboardPath(path)) {
       if ((await page.locator('main, [role="main"]').count()) > 0) return true;
       const body = await page.locator('body').innerText();
       if (
@@ -56,10 +66,13 @@ export async function isDashboardShellVisible(page: Page): Promise<boolean> {
 async function isAuthenticatedShellFallbackVisible(page: Page): Promise<boolean> {
   if (page.isClosed()) return false;
   try {
-    const pathname = new URL(page.url()).pathname.toLowerCase();
+    const pathname = new URL(page.url()).pathname.trim().toLowerCase();
     if (/^\/login(\/|$)/.test(pathname)) return false;
+    if (pathnameLooksLikeSelectAccountPath(pathname)) return false;
     const onKnownAuthedRoute =
-      pathname.includes('account') || pathname.includes('payment-link') || pathname.includes('transactions');
+      pathnameLooksLikeAccountDashboardPath(pathname) ||
+      pathname.includes('payment-link') ||
+      pathname.includes('transactions');
     if (!onKnownAuthedRoute) return false;
 
     // Sidebar + workspace affordances that appear even when dashboard cards lag in CI.
@@ -79,9 +92,14 @@ async function isAuthenticatedShellFallbackVisible(page: Page): Promise<boolean>
 
 function onKnownAuthenticatedRoute(page: Page): boolean {
   try {
-    const pathname = new URL(page.url()).pathname.toLowerCase();
+    const pathname = new URL(page.url()).pathname.trim().toLowerCase();
     if (/^\/login(\/|$)/.test(pathname)) return false;
-    return pathname.includes('account') || pathname.includes('payment-link') || pathname.includes('transactions');
+    if (pathnameLooksLikeSelectAccountPath(pathname)) return false;
+    return (
+      pathnameLooksLikeAccountDashboardPath(pathname) ||
+      pathname.includes('payment-link') ||
+      pathname.includes('transactions')
+    );
   } catch {
     return false;
   }

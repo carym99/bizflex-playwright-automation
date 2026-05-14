@@ -1,8 +1,9 @@
 import { expect, type Page } from '@playwright/test';
 import { transactionSelectors } from './selectors';
+import { urlIsAccountDashboard } from '../support/ui/accountRoutes';
 
 export async function assertStableDashboard(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/account/i, { timeout: 45_000 });
+  await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
   const body = page.locator('body');
   await expect(body).toContainText(/quick action|dashboard|account|recent transactions/i, {
     timeout: 20_000,

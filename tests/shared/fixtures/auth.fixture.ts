@@ -7,6 +7,8 @@ import {
 import { getBearerTokenFromPage } from '../../../support/auth/browserAuthSession';
 import { assertStillAuthenticated } from '../../../support/ui/assertStillAuthenticated';
 import { installAuthSessionSeedInitScript } from '../../../support/ui/prepareAuthenticatedPage';
+import { urlIsAccountDashboard } from '../../../support/ui/accountRoutes';
+import { resolveSelectAccountToDashboardIfNeeded } from '../../../support/ui/resolveSelectAccount';
 
 /**
  * Authenticated UI smoke / isolated flows: fresh browser context per test from
@@ -54,7 +56,8 @@ export const test = base.extend<{ authenticatedPage: Page }>({
           });
           throw new Error('Authenticated storage state is invalid or expired (landed on /login after /account)');
         }
-        await expect(pg).toHaveURL(/\/account/i, { timeout: 60_000 });
+        await resolveSelectAccountToDashboardIfNeeded(pg);
+        await expect(pg).toHaveURL(urlIsAccountDashboard, { timeout: 60_000 });
         await assertStillAuthenticated(pg, testInfo, `auth-fixture-bootstrap-${attempt}`);
         context = ctx;
         page = pg;

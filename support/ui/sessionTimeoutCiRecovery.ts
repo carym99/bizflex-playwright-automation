@@ -7,6 +7,7 @@ import {
 } from './authSessionRecovery';
 import { handleSessionTimeout } from './handleSessionTimeout';
 import { gotoWithRetry } from './navigation';
+import { resolveSelectAccountToDashboardIfNeeded } from './resolveSelectAccount';
 
 /**
  * When the SPA shows a session-expired / re-auth modal, `handleSessionTimeout` throws.
@@ -33,6 +34,7 @@ export async function handleSessionTimeoutWithOptionalCiRecovery(
     }
     await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded').catch(() => {});
+    await resolveSelectAccountToDashboardIfNeeded(page);
     await waitForBearerTokenInPage(page, 60_000).catch(() => {});
     await mirrorSessionUserTokensToLocalStorage(page).catch(() => {});
     await handleSessionTimeout(page);

@@ -11,6 +11,7 @@ import {
   getLoginPasswordInput,
   getLoginSubmitButton,
 } from '../../support/ui/loginHelpers';
+import { urlIsAccountDashboard } from '../../support/ui/accountRoutes';
 
 Before(async function (this: E2EWorld) {
   this.browser = await (await import('@playwright/test')).chromium.launch({ headless: true });
@@ -35,7 +36,7 @@ When('I sign in with a valid customer account', async function (this: E2EWorld) 
 });
 
 Then('I should be redirected to the secure dashboard', async function (this: E2EWorld) {
-  await expect(this.page!).toHaveURL(/\/account/i, { timeout: 45_000 });
+  await expect(this.page!).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
 });
 
 Then('I should see my wallet balance and quick actions', async function (this: E2EWorld) {

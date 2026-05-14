@@ -13,6 +13,7 @@ import {
   getLoginSubmitButton,
 } from '../../support/ui/loginHelpers';
 import { gotoWithRetry } from '../../support/ui/navigation';
+import { urlIsAccountDashboard } from '../../support/ui/accountRoutes';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -64,7 +65,7 @@ test.describe('@auth User Login UI', () => {
       await loginPage.uiLogin(getUiEmail(), getValidPassword());
     });
     await test.step('Land on account', async () => {
-      await expect(page).toHaveURL(/\/account/i, { timeout: 45_000 });
+      await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
     });
   });
 

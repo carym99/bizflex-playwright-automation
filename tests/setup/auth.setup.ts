@@ -2,7 +2,7 @@
  * Project dependency: runs before `chromium` (authenticated UI) tests.
  *
  * Refreshes `storage/authenticated-user.json` via `getAuthenticatedStorageState()` (UI-first in CI),
- * verifies `/account` plus tokens in a disposable browser, reclones worker slot files.
+ * Verifies dashboard readiness on `/account` (resolving `/select-account` when present), plus tokens in a disposable browser, reclones worker slot files.
  */
 import { test as setup, expect, chromium } from '@playwright/test';
 import type { Browser, BrowserContext, Page, TestInfo } from '@playwright/test';
@@ -20,6 +20,8 @@ import {
 } from '../../support/auth/browserAuthSession';
 import { gotoWithRetry } from '../../support/ui/navigation';
 import { installAuthSessionSeedInitScript } from '../../support/ui/prepareAuthenticatedPage';
+import { urlIsAccountDashboard } from '../../support/ui/accountRoutes';
+import { resolveSelectAccountToDashboardIfNeeded } from '../../support/ui/resolveSelectAccount';
 
 setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo) => {
   setup.setTimeout(180_000);
@@ -56,7 +58,9 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
       console.log('[auth.setup] after /account url=', page.url(), 'accessTokenPresent=', accessProbe);
     }
 
-    await expect(page).toHaveURL(/\/account/i, { timeout: 60_000 });
+    await resolveSelectAccountToDashboardIfNeeded(page);
+
+    await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 60_000 });
 
     // Under heavy parallel load, auth hydration can lag behind initial /account render.
     // For setup we require browser-auth state (not a repeated profile API probe).

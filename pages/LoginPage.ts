@@ -1,6 +1,8 @@
 import { type Page, type TestInfo, expect } from '@playwright/test';
 import { assertStillAuthenticated } from '../support/ui/assertStillAuthenticated';
 import { ensureBizflexCardModalClosed } from '../utils/modal';
+import { urlIsAccountDashboard } from '../support/ui/accountRoutes';
+import { resolveSelectAccountToDashboardIfNeeded } from '../support/ui/resolveSelectAccount';
 import {
   assertLoginFormReady,
   getLoginEmailInput,
@@ -20,9 +22,10 @@ export class LoginPage {
   /** ~20% UI check: authenticated session can load account shell. */
   async verifyLoggedIn(testInfo: TestInfo): Promise<void> {
     await gotoWithRetry(this.page, '/account', { waitUntil: 'domcontentloaded' });
+    await resolveSelectAccountToDashboardIfNeeded(this.page);
     await assertStillAuthenticated(this.page, testInfo, 'LoginPage.verifyLoggedIn');
     await ensureBizflexCardModalClosed(this.page);
-    await expect(this.page).toHaveURL(/\/account/i, { timeout: 45_000 });
+    await expect(this.page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
     const body = this.page.locator('body');
     await expect(body).toContainText(/quick action|account|dashboard|bizflex/i, { timeout: 20_000 });
   }
@@ -59,7 +62,15 @@ export class LoginPage {
     await passwordInput.press('Enter');
     await loginResponse;
 
-    await expect(this.page).toHaveURL(/\/account/i, { timeout: accountTimeout });
+    await this.page.waitForURL(
+      (url) => {
+        const p = url.pathname.toLowerCase();
+        return /^\/select-account(\/|$)/.test(p) || /^\/account(\/|$)/.test(p) || /^\/login(\/|$)/.test(p);
+      },
+      { timeout: accountTimeout }
+    );
+    await resolveSelectAccountToDashboardIfNeeded(this.page);
+    await expect(this.page).toHaveURL(urlIsAccountDashboard, { timeout: accountTimeout });
     await this.page.waitForLoadState('domcontentloaded').catch(() => {});
     await ensureBizflexCardModalClosed(this.page);
   }

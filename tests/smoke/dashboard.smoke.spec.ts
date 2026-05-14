@@ -4,6 +4,7 @@
 import { test, expect } from '../shared/fixtures/auth.fixture';
 import { prepareAuthenticatedPage } from '../../support/ui/prepareAuthenticatedPage';
 import { isDashboardShellVisible } from '../../support/ui/dashboardReadiness';
+import { urlIsAccountDashboard } from '../../support/ui/accountRoutes';
 
 test.describe('@smoke Dashboard shell', () => {
   test('account dashboard loads (flexible shell checks)', async ({ authenticatedPage }, testInfo) => {
@@ -14,7 +15,7 @@ test.describe('@smoke Dashboard shell', () => {
     });
 
     await test.step('Assert URL and shell', async () => {
-      await expect(authenticatedPage).toHaveURL(/\/account/i);
+      await expect(authenticatedPage).toHaveURL(urlIsAccountDashboard);
       expect(await isDashboardShellVisible(authenticatedPage)).toBeTruthy();
     });
 

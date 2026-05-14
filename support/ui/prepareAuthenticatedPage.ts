@@ -18,7 +18,12 @@ import { dismissCookieBanner } from './dismissCookieBanner';
 import { waitForDashboardReadiness } from './dashboardReadiness';
 import { handleSessionTimeoutWithOptionalCiRecovery } from './sessionTimeoutCiRecovery';
 import { readAuthSessionSeed } from '../auth/storageState';
+import {
+  pathnameLooksLikeAccountDashboardPath,
+  pathnameLooksLikeSelectAccountPath,
+} from './accountRoutes';
 import { gotoWithRetry } from './navigation';
+import { resolveSelectAccountToDashboardIfNeeded } from './resolveSelectAccount';
 
 /**
  * Ensures `sessionStorage` matches the API-written seed file before the first navigation.
@@ -51,7 +56,7 @@ async function assertHasBrowserTokens(page: Page, phase: string): Promise<void> 
     await waitForBearerTokenInPage(page, tokenWaitMs);
   } catch {
     // Last-resort nudge: tokens may hydrate only after a second navigation to /account.
-    if (!pathnameLooksLikeLogin(page) && getPagePathname(page).includes('account')) {
+    if (!pathnameLooksLikeLogin(page) && pathnameLooksLikeAccountDashboardPath(getPagePathname(page))) {
       await gotoWithRetry(page, '/account', { waitUntil: 'domcontentloaded' }).catch(() => {});
       await page.waitForLoadState('domcontentloaded').catch(() => {});
       try {
@@ -87,7 +92,11 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
     await page.waitForFunction(
       () => {
         const p = window.location.pathname.toLowerCase();
-        return p.includes('account') || /^\/login(\/|$)/.test(p);
+        return (
+          /^\/login(\/|$)/.test(p) ||
+          /^\/select-account(\/|$)/.test(p) ||
+          /^\/account(\/|$)/.test(p)
+        );
       },
       null,
       { timeout: 30_000 }
@@ -105,7 +114,11 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
         await page.waitForFunction(
           () => {
             const p = window.location.pathname.toLowerCase();
-            return p.includes('account') || /^\/login(\/|$)/.test(p);
+            return (
+              /^\/login(\/|$)/.test(p) ||
+              /^\/select-account(\/|$)/.test(p) ||
+              /^\/account(\/|$)/.test(p)
+            );
           },
           null,
           { timeout: 20_000 }
@@ -131,7 +144,11 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
           await page.waitForFunction(
             () => {
               const p = window.location.pathname.toLowerCase();
-              return p.includes('account') || /^\/login(\/|$)/.test(p);
+              return (
+                /^\/login(\/|$)/.test(p) ||
+                /^\/select-account(\/|$)/.test(p) ||
+                /^\/account(\/|$)/.test(p)
+              );
             },
             null,
             { timeout: 30_000 }
@@ -151,27 +168,36 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
     }
   }
 
-  await page.waitForURL(/\/account|\/login/i, { timeout: 45_000 }).catch(() => {});
+  await page.waitForURL(/\/account|\/login|\/select-account/i, { timeout: 45_000 }).catch(() => {});
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
   const pathAfterTokens = getPagePathname(page);
   const alreadyOnAccountShell =
-    pathAfterTokens.includes('account') && !pathnameLooksLikeLogin(page);
+    (pathnameLooksLikeAccountDashboardPath(pathAfterTokens) || pathnameLooksLikeSelectAccountPath(pathAfterTokens)) &&
+    !pathnameLooksLikeLogin(page);
   if (!alreadyOnAccountShell) {
     await waitForStableAuthenticatedRoute(page, 25_000).catch(async () => {
       await logBrowserAuthDebug(page, 'prepareAuthenticatedPage waitForStableAuthenticatedRoute timeout');
       const p = getPagePathname(page);
-      const ok = p.includes('account') || p.includes('payment-link') || /\/transactions?/i.test(p);
+      const ok =
+        pathnameLooksLikeAccountDashboardPath(p) ||
+        pathnameLooksLikeSelectAccountPath(p) ||
+        p.includes('payment-link') ||
+        /\/transactions?/i.test(p);
       if (!ok) {
-        throw new Error('prepareAuthenticatedPage: URL did not stabilize on /account, /payment-link, or /transactions');
+        throw new Error(
+          'prepareAuthenticatedPage: URL did not stabilize on /account, /select-account, /payment-link, or /transactions'
+        );
       }
     });
   }
 
+  await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after stable route');
+  await resolveSelectAccountToDashboardIfNeeded(page);
+
   await assertHasBrowserTokens(page, 'prepareAuthenticatedPage');
   await mirrorSessionUserTokensToLocalStorage(page);
 
-  await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after stable route');
   await handleSessionTimeoutWithOptionalCiRecovery(page, testInfo, 'prepareAuthenticatedPage');
   await dismissCardModal(page);
   await dismissCookieBanner(page);

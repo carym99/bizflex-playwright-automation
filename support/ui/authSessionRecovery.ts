@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { gotoWithRetry } from './navigation';
+import { resolveSelectAccountToDashboardIfNeeded } from './resolveSelectAccount';
 
 /** Use pathname only — `page.url()` can contain `login` in unrelated query params. */
 export function getPagePathname(page: Page): string {
@@ -46,7 +47,12 @@ export async function waitForStableAuthenticatedRoute(page: Page, timeoutMs = 45
       const p = window.location.pathname.toLowerCase();
       const onLogin = /^\/login(\/|$)/.test(p);
       if (onLogin) return false;
-      return p.includes('account') || p.includes('payment-link') || /\/transactions?/i.test(p);
+      return (
+        /^\/select-account(\/|$)/.test(p) ||
+        /^\/account(\/|$)/.test(p) ||
+        p.includes('payment-link') ||
+        /\/transactions?(\/|$)/i.test(p)
+      );
     },
     null,
     { timeout: timeoutMs }
@@ -83,7 +89,8 @@ export async function attemptUiLoginRecovery(page: Page): Promise<boolean> {
   await passwordInput.fill(password);
   await expect(submit).toBeEnabled({ timeout: 15_000 });
   await submit.click();
-  await page.waitForURL(/\/account/i, { timeout: 45_000 });
+  await page.waitForURL(/\/select-account|\/account|\/login/i, { timeout: 45_000 });
+  await resolveSelectAccountToDashboardIfNeeded(page);
   console.warn('[auth] Seeded session redirected to /login; recovered with UI login fallback');
   return true;
 }
