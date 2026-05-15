@@ -8,6 +8,12 @@ export function pathnameLooksLikeSelectAccountPath(pathname: string): boolean {
   return /^\/select-account(\/|$)/i.test(p);
 }
 
+/** Main wallet dashboard after an account context is active (not the picker). */
+export function pathnameLooksLikeAccountDashboardPath(pathname: string): boolean {
+  const p = pathname.trim().toLowerCase();
+  return /^\/account(\/|$)/i.test(p);
+}
+
 /** Use with `expect(page).toHaveURL(...)` so `/select-account` is not mistaken for `/account`. */
 export function urlIsAccountDashboard(url: URL): boolean {
   return pathnameLooksLikeAccountDashboardPath(url.pathname);

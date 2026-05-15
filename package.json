@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "playwright install chromium",
     "auth": "ts-node -r dotenv/config utils/auth.ts",
+    "test:account-selection": "playwright test tests/auth/account-selection.ui.spec.ts --project=ui-login",
     "test": "npm run auth && playwright test",
     "test:only": "playwright test",
     "test:ui": "playwright test --project=chromium",

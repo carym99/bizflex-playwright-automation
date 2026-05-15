@@ -1,6 +1,14 @@
 /**
  * Central selectors — aligned with cypress/pages + support/selectors (data-testid first).
  */
+/** Post-login account picker (`/select-account`). Prefer data-testid when the app adds them. */
+export const selectAccountSelectors = {
+  screen: '[data-testid="select-account-page"]',
+  card: (accountId: string) =>
+    `[data-testid="select-account-option-${accountId}"], [data-testid="account-option-${accountId}"]`,
+  continue: '[data-testid="select-account-continue"]',
+};
+
 export const loginSelectors = {
   email: '[data-testid="email"], [data-testid="email-input"], input[type="email"]',
   password: '[data-testid="password"], [data-testid="password-input"], input[type="password"]',

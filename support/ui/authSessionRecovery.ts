@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { gotoWithRetry } from './navigation';
-import { resolveSelectAccountToDashboardIfNeeded } from './resolveSelectAccount';
+import { resolveSelectAccountToDashboardIfNeeded } from './selectAccount';
 
 /** Use pathname only — `page.url()` can contain `login` in unrelated query params. */
 export function getPagePathname(page: Page): string {

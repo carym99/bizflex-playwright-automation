@@ -23,7 +23,8 @@ import {
   pathnameLooksLikeSelectAccountPath,
 } from './accountRoutes';
 import { gotoWithRetry } from './navigation';
-import { resolveSelectAccountToDashboardIfNeeded } from './resolveSelectAccount';
+import type { AccountSelectOptions } from '../../config/accountContext';
+import { resolveSelectAccountToDashboardIfNeeded } from './selectAccount';
 
 /**
  * Ensures `sessionStorage` matches the API-written seed file before the first navigation.
@@ -193,7 +194,7 @@ export async function prepareAuthenticatedPage(page: Page, testInfo: TestInfo): 
   }
 
   await failIfLoginRedirect(page, testInfo, 'prepareAuthenticatedPage: after stable route');
-  await resolveSelectAccountToDashboardIfNeeded(page);
+  await resolveSelectAccountToDashboardIfNeeded(page, accountOptions);
 
   await assertHasBrowserTokens(page, 'prepareAuthenticatedPage');
   await mirrorSessionUserTokensToLocalStorage(page);

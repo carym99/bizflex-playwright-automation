@@ -67,6 +67,11 @@ jobs:
           VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
           UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
           UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
+          E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
+          E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
+          E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
+          E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
+          E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
         shell: bash
         run: |
           export API_URL="${API_URL:-https://bizflex.onrender.com}"
@@ -87,6 +92,11 @@ jobs:
           UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
           MFA_USER_EMAIL: ${{ secrets.MFA_USER_EMAIL }}
           MFA_USER_PASSWORD: ${{ secrets.MFA_USER_PASSWORD }}
+          E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
+          E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
+          E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
+          E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
+          E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
           FAILED_LOGIN_BUDGET_MS: "7000"
         shell: bash
         run: |

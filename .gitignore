@@ -13,3 +13,5 @@ playwright/.cache/
 storage/*.json
 storage/**/*.json
 playwright/.auth/
+.auth/
+.auth/**/*.json

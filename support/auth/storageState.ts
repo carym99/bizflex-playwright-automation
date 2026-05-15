@@ -6,7 +6,9 @@ import { resolveApiUrl, extractTokenFromLoginBody, extractRefreshTokenFromLoginB
 import { isLikelyJwt } from '../../schemas/token.schema';
 import { logAuthDiagnostics } from './debugAuthState';
 import { buildBrowserAuthSeed, loginByApi } from './loginByApi';
+import { mergeAccountSelectOptions } from '../../config/accountContext';
 import { gotoWithRetry } from '../ui/navigation';
+import { resolveSelectAccountToDashboardIfNeeded } from '../ui/selectAccount';
 import { LoginPage } from '../../pages/LoginPage';
 import {
   disposeContext,
@@ -214,7 +216,7 @@ async function generateAuthenticatedStorageInBrowser(
         } else {
           const loginPage = new LoginPage(page);
           console.log(`[auth-storage] attempt ${attempt} using UI login (fresh context, no closed-page reuse)`);
-          await loginPage.uiLogin(email, password);
+          await loginPage.uiLogin(email, password, mergeAccountSelectOptions());
           throwIfPageClosed(page, 'after uiLogin');
           try {
             await waitUntilAuthenticated(page, { phase: `attempt-${attempt}-post-ui-login` });

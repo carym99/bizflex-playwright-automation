@@ -21,7 +21,8 @@ import {
 import { gotoWithRetry } from '../../support/ui/navigation';
 import { installAuthSessionSeedInitScript } from '../../support/ui/prepareAuthenticatedPage';
 import { urlIsAccountDashboard } from '../../support/ui/accountRoutes';
-import { resolveSelectAccountToDashboardIfNeeded } from '../../support/ui/resolveSelectAccount';
+import { mergeAccountSelectOptions } from '../../config/accountContext';
+import { resolveSelectAccountToDashboardIfNeeded } from '../../support/ui/selectAccount';
 
 setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo) => {
   setup.setTimeout(180_000);
@@ -58,7 +59,7 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
       console.log('[auth.setup] after /account url=', page.url(), 'accessTokenPresent=', accessProbe);
     }
 
-    await resolveSelectAccountToDashboardIfNeeded(page);
+    await resolveSelectAccountToDashboardIfNeeded(page, mergeAccountSelectOptions());
 
     await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 60_000 });
 

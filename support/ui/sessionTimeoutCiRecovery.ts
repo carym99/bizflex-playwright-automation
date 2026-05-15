@@ -7,7 +7,7 @@ import {
 } from './authSessionRecovery';
 import { handleSessionTimeout } from './handleSessionTimeout';
 import { gotoWithRetry } from './navigation';
-import { resolveSelectAccountToDashboardIfNeeded } from './resolveSelectAccount';
+import { resolveSelectAccountToDashboardIfNeeded } from './selectAccount';
 
 /**
  * When the SPA shows a session-expired / re-auth modal, `handleSessionTimeout` throws.
