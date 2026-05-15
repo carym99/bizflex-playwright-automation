@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import type { AccountSelectOptions } from '../../config/accountContext';
-import { getUiEmail, getValidPassword } from '../../fixtures/auth.fixture';
+import { getUiEmail, getUiPassword } from '../../fixtures/auth.fixture';
 import { LoginPage } from '../../pages/LoginPage';
 import {
   assertActiveAccountContext,
@@ -34,7 +34,7 @@ export async function loginAndSelectAccount(
   options: LoginAndSelectAccountOptions = {}
 ): Promise<SelectAccountResult> {
   const email = options.email ?? getUiEmail();
-  const password = options.password ?? getValidPassword();
+  const password = options.password ?? getUiPassword();
   const skipLogin = options.skipLoginIfAuthenticated !== false;
   const path = getPathname(page);
   const onPicker = pathnameLooksLikeSelectAccountPath(path);

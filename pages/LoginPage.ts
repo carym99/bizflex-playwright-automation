@@ -10,8 +10,8 @@ import {
   getLoginPasswordInput,
   getLoginSubmitButton,
 } from '../support/ui/loginHelpers';
+import { waitForLoginOutcomeAfterSubmit } from '../support/ui/waitForLoginOutcome';
 import { gotoWithRetry } from '../support/ui/navigation';
-import { isAuthLoginRequest } from '../utils/loginResponse';
 
 /**
  * Minimal UI login + verification — mirrors stable Cypress authSelectors.
@@ -33,9 +33,7 @@ export class LoginPage {
 
   /**
    * Full browser login (no pre-seeded storage) — use in dedicated projects or before generateStorageState validation.
-   */
-  /**
-   * @param completeAccountSelection When false, stops on `/select-account` without clicking Continue (for picker specs).
+   * @param completeAccountSelection When false, stops after `/select-account` (picker specs).
    */
   async uiLogin(
     email: string,
@@ -64,22 +62,38 @@ export class LoginPage {
     await emailInput.fill(email);
     await passwordInput.fill(password);
     await expect(submitButton).toBeEnabled({ timeout: submitEnableTimeout });
-    const loginResponse = this.page.waitForResponse((response) => isAuthLoginRequest(response.request()), {
-      timeout: accountTimeout,
-    });
-    // Enter submit is more reliable than click on Chakra submit in CI.
-    await passwordInput.press('Enter');
-    await loginResponse;
 
-    await this.page.waitForURL(
-      (url) => {
-        const p = url.pathname.toLowerCase();
-        return /^\/select-account(\/|$)/.test(p) || /^\/account(\/|$)/.test(p) || /^\/login(\/|$)/.test(p);
-      },
-      { timeout: accountTimeout }
-    );
+    await submitButton.click();
+    const stillOnLogin = () => /\/login(\/|$)/i.test(new URL(this.page.url()).pathname);
+    if (stillOnLogin()) {
+      await passwordInput.press('Enter').catch(() => {});
+    }
+
+    const outcome = await waitForLoginOutcomeAfterSubmit(this.page, {
+      timeoutMs: accountTimeout,
+      emailForErrors: email,
+    });
+
     const complete = options?.completeAccountSelection !== false;
-    if (complete) {
+    if (!complete) {
+      if (outcome.kind !== 'select-account' && outcome.kind !== 'account') {
+        throw new Error(
+          `Login did not reach /select-account or /account (url=${this.page.url()}). ` +
+            `Check UI_USER_EMAIL + UI_USER_PASSWORD (or TEST_EMAIL + TEST_PASSWORD) and API_URL.`
+        );
+      }
+      return;
+    }
+
+    if (complete && outcome.kind === 'account') {
+      await resolveSelectAccountToDashboardIfNeeded(this.page, accountOptions);
+      await expect(this.page).toHaveURL(urlIsAccountDashboard, { timeout: accountTimeout });
+      await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+      await ensureBizflexCardModalClosed(this.page);
+      return;
+    }
+
+    if (complete && outcome.kind === 'select-account') {
       await resolveSelectAccountToDashboardIfNeeded(this.page, accountOptions);
       await expect(this.page).toHaveURL(urlIsAccountDashboard, { timeout: accountTimeout });
       await this.page.waitForLoadState('domcontentloaded').catch(() => {});

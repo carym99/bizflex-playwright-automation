@@ -2,7 +2,7 @@
  * Account switching after login — `/select-account` picker and dashboard context.
  */
 import { test, expect } from '@playwright/test';
-import { getUiEmail, getValidPassword } from '../../fixtures/auth.fixture';
+import { getUiEmail, getUiPassword } from '../../fixtures/auth.fixture';
 import {
   resolveBusinessAccountContextFromEnv,
   resolveFreelanceAccountContextFromEnv,
@@ -20,10 +20,16 @@ test.describe.configure({ timeout: 120_000 });
 
 async function loginToAccountPicker(page: import('@playwright/test').Page): Promise<void> {
   const loginPage = new LoginPage(page);
-  await loginPage.uiLogin(getUiEmail(), getValidPassword(), undefined, { completeAccountSelection: false });
+  await loginPage.uiLogin(getUiEmail(), getUiPassword(), undefined, { completeAccountSelection: false });
   const picker = new SelectAccountPage(page);
   if (!picker.isOnSelectAccountPath()) {
     await gotoWithRetry(page, '/select-account', { waitUntil: 'domcontentloaded' });
+  }
+  if (!picker.isOnSelectAccountPath()) {
+    throw new Error(
+      `Expected /select-account after login but URL is ${page.url()}. ` +
+        `Verify UI_USER_EMAIL/UI_USER_PASSWORD (or TEST_EMAIL/TEST_PASSWORD) in .env.local match the QA user.`
+    );
   }
   await picker.assertOnSelectAccountScreen();
 }

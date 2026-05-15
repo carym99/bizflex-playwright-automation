@@ -18,6 +18,23 @@ export function getValidPassword(): string {
 }
 
 /**
+ * Password for UI login (`UI_USER_EMAIL`). Falls back to `VALID_USER_PASSWORD` then `TEST_PASSWORD`.
+ */
+export function getUiPassword(): string {
+  const uiEmail = process.env.UI_USER_EMAIL?.trim();
+  if (uiEmail) {
+    const uiPass = process.env.UI_USER_PASSWORD?.trim();
+    if (uiPass) return uiPass;
+    const validEmail = process.env.VALID_USER_EMAIL?.trim();
+    if (validEmail === uiEmail) {
+      const vp = process.env.VALID_USER_PASSWORD?.trim();
+      if (vp) return vp;
+    }
+  }
+  return getValidPassword();
+}
+
+/**
  * Email used to obtain a bearer token for `single-transfer` API tests.
  * Prefers `VALID_USER_EMAIL` when set (typical non-PND wallet in `.env.local`), otherwise same as {@link getValidEmail}.
  */

@@ -2,7 +2,7 @@ import { Before, After, Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { E2EWorld } from '../support/world';
 import { LoginPage } from '../../pages/LoginPage';
-import { getUiEmail, getValidPassword } from '../../fixtures/auth.fixture';
+import { getUiEmail, getUiPassword } from '../../fixtures/auth.fixture';
 import { transactionSelectors } from '../../utils/selectors';
 import { assertRecentTransactionsTableVisible } from '../../utils/dashboard';
 import {
@@ -32,7 +32,7 @@ Given('I open the BizFlex login page', async function (this: E2EWorld) {
 
 When('I sign in with a valid customer account', async function (this: E2EWorld) {
   const loginPage = new LoginPage(this.page!);
-  await loginPage.uiLogin(getUiEmail(), getValidPassword());
+  await loginPage.uiLogin(getUiEmail(), getUiPassword());
 });
 
 Then('I should be redirected to the secure dashboard', async function (this: E2EWorld) {

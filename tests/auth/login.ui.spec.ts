@@ -4,7 +4,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { LoginPage } from '../../pages/LoginPage';
-import { getUiEmail, getValidPassword, suspendedAccountMessage } from '../../fixtures/auth.fixture';
+import { getUiEmail, getUiPassword, getValidPassword, suspendedAccountMessage } from '../../fixtures/auth.fixture';
 import { isAuthLoginRequest } from '../../utils/loginResponse';
 import {
   assertLoginFormReady,
@@ -62,7 +62,7 @@ test.describe('@auth User Login UI', () => {
   test('logs in via UI and redirects to /account', async ({ page }) => {
     await test.step('Login with valid credentials', async () => {
       const loginPage = new LoginPage(page);
-      await loginPage.uiLogin(getUiEmail(), getValidPassword());
+      await loginPage.uiLogin(getUiEmail(), getUiPassword());
     });
     await test.step('Land on account', async () => {
       await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
