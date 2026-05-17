@@ -2,11 +2,12 @@
  * Payment settings update API coverage.
  * Endpoint: PATCH /v1/payment/settings/update (multipart/form-data)
  */
-import { test, expect, type FilePayload } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { assertNoSensitiveFields } from '../../helpers/responseValidator';
 import { loginForAccessToken } from '../../helpers/apiAuth';
 import {
   updatePaymentSettings,
+  type MultipartFilePayload,
   type UpdatePaymentSettingsSuccessBody,
   type UpdatePaymentSettingsMultipart,
 } from '../../helpers/paymentSettings';
@@ -39,11 +40,52 @@ function baseMultipart(overrides: Partial<UpdatePaymentSettingsMultipart> = {}):
   };
 }
 
-function fakeFile(name: string, mimeType: string, bytes: number): FilePayload {
+function fakeFile(name: string, mimeType: string, bytes: number): MultipartFilePayload {
   return { name, mimeType, buffer: Buffer.alloc(bytes, 1) };
 }
 
+function paymentSettingsHappyPathSkipReason(): string | null {
+  if (!process.env.PAYMENT_SETTINGS_ACCOUNT_ID?.trim()) {
+    return 'Set PAYMENT_SETTINGS_ACCOUNT_ID for payment settings happy path';
+  }
+  if (!process.env.PAYMENT_SETTINGS_SETTING_ID?.trim()) {
+    return 'Set PAYMENT_SETTINGS_SETTING_ID for payment settings happy path';
+  }
+  return null;
+}
+
+async function updateWithFreshAuthRetry(
+  request: Parameters<typeof test>[0] extends any ? any : never,
+  multipart: UpdatePaymentSettingsMultipart
+) {
+  let token = await loginForAccessToken(request);
+  let res = await updatePaymentSettings(request, token, multipart);
+  if (res.response.status() === 401) {
+    const msg = typeof (res.body as { message?: string })?.message === 'string' ? (res.body as { message: string }).message : '';
+    if (msg.toLowerCase().includes('session has expired')) {
+      token = await loginForAccessToken(request);
+      res = await updatePaymentSettings(request, token, multipart);
+    }
+  }
+  return res;
+}
+
 test.describe('@regression PATCH /v1/payment/settings/update', () => {
+  test('updates payment settings successfully with valid multipart payload', async ({ request }) => {
+    const skip = paymentSettingsHappyPathSkipReason();
+    test.skip(!!skip, skip ?? '');
+
+    const { response, durationMs, body } = await updateWithFreshAuthRetry(request, baseMultipart());
+    if (response.status() === 404) {
+      test.skip(true, `Payment settings not found: ${JSON.stringify(body).slice(0, 200)}`);
+    }
+
+    expect(response.status(), `Unexpected status: ${JSON.stringify(body).slice(0, 350)}`).toBe(200);
+    expectWithinBudget(durationMs, UPDATE_BUDGET_MS, 'payment settings update');
+    assertSuccessBody(body);
+    assertNoSensitiveFields(body);
+  });
+
   test('missing accountId is rejected', async ({ request }) => {
     const token = await loginForAccessToken(request);
     const { response, body } = await updatePaymentSettings(request, token, baseMultipart({ accountId: undefined }));
@@ -119,4 +161,3 @@ test.describe('@regression PATCH /v1/payment/settings/update', () => {
     assertNoSensitiveFields(body);
   });
 });
-

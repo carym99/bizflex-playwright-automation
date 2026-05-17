@@ -42,14 +42,15 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
       baseURL,
       storageState: storagePath,
     });
-    page = await context.newPage();
+    const setupPage = await context.newPage();
+    page = setupPage;
 
     const accountOptions = mergeAccountSelectOptions();
-    await ensureAuthenticatedDashboardPage(page, testInfo, accountOptions);
+    await ensureAuthenticatedDashboardPage(setupPage, testInfo, accountOptions);
 
     if (process.env.CI) {
-      const accessProbe = Boolean(await getBearerTokenFromPage(page));
-      console.log('[auth.setup] dashboard ready url=', page.url(), 'accessTokenPresent=', accessProbe);
+      const accessProbe = Boolean(await getBearerTokenFromPage(setupPage));
+      console.log('[auth.setup] dashboard ready url=', setupPage.url(), 'accessTokenPresent=', accessProbe);
     }
 
     // Under heavy parallel load, auth hydration can lag behind initial /account render.
@@ -57,8 +58,8 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
     await expect
       .poll(
         async () => {
-          const hasBearer = Boolean(await getBearerTokenFromPage(page));
-          const onLogin = pathnameIsLoginRoute(page);
+          const hasBearer = Boolean(await getBearerTokenFromPage(setupPage));
+          const onLogin = pathnameIsLoginRoute(setupPage);
           return { hasBearer, onLogin };
         },
         { timeout: 60_000 }
@@ -67,10 +68,10 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
     await expect
       .poll(
         async () => {
-          await mirrorSessionUserTokensToLocalStorage(page);
+          await mirrorSessionUserTokensToLocalStorage(setupPage);
           return {
-            accessToken: await getBearerTokenFromPage(page),
-            refreshToken: await getRefreshTokenFromPage(page),
+            accessToken: await getBearerTokenFromPage(setupPage),
+            refreshToken: await getRefreshTokenFromPage(setupPage),
           };
         },
         { timeout: 25_000 }

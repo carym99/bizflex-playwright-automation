@@ -22,6 +22,7 @@ export const laneToGrep = (lane: 'smoke' | 'auth' | 'api-auth' | 'regression'): 
 
 /**
  * PR fast gate: critical UI/API auth signal without full regression matrix.
+ * Account-context product API: one @api-auth profile test only (see account-context.api.spec.ts).
  * Playwright `--grep` accepts a regex.
  */
 export const prSmokeGateGrep = `${Tag.smoke}|${Tag.auth}|${Tag.apiAuth}`;

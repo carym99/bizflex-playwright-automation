@@ -1,8 +1,14 @@
-import type { APIRequestContext, APIResponse, FilePayload } from '@playwright/test';
+import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { resolveApiUrl } from '../utils/api';
 
+export type MultipartFilePayload = {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+};
+
 export type UpdatePaymentSettingsMultipart = {
-  logo?: FilePayload | undefined;
+  logo?: MultipartFilePayload | undefined;
   accountId?: string;
   name?: string;
   address?: string;
@@ -45,4 +51,3 @@ export async function updatePaymentSettings(
   const body = await response.json().catch(async () => ({ raw: await response.text().catch(() => '') }));
   return { response, durationMs, body };
 }
-

@@ -25,9 +25,8 @@ Implications:
 
 | Metric | Value |
 |--------|--------|
-| Passed | 9 |
-| Failed | 0 |
-| Skipped | 0 |
+| Passed | 4 (focused engineering suite) |
+| Cucumber | 8 scenarios (`npm run test:e2e:accounts`, nightly) |
 | Project | `ui-login` |
 
 **Command:**
