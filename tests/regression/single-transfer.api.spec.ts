@@ -43,6 +43,23 @@ function baseTransferPayload(overrides: Partial<SingleTransferPayload> = {}): Si
   };
 }
 
+function assertSuccessBody(body: unknown): void {
+  const b = (body && typeof body === 'object' ? (body as Record<string, unknown>) : {}) as Record<string, unknown>;
+  expect(Boolean(b.success)).toBe(true);
+  expect(String(b.message || '')).toBe('Transaction is being processed');
+}
+
+function transferHappyPathSkipReason(): string | null {
+  if (process.env.SKIP_LIVE_TRANSFER === '1') return 'SKIP_LIVE_TRANSFER=1';
+  if (!process.env.TRANSFER_ACCOUNT_ID?.trim()) {
+    return 'Set TRANSFER_ACCOUNT_ID for live transfer happy path (debits real balance)';
+  }
+  if (!process.env.TRANSFER_TRANSACTION_PIN?.trim()) {
+    return 'Set TRANSFER_TRANSACTION_PIN for live transfer happy path';
+  }
+  return null;
+}
+
 function assertFailureBody(body: unknown): void {
   const b = (body && typeof body === 'object' ? (body as Record<string, unknown>) : {}) as Record<string, unknown>;
   expect(
@@ -66,6 +83,23 @@ async function createTransferWithFreshAuthRetry(
 }
 
 test.describe('@regression POST /v1/account/single-transfer', () => {
+  test('creates single transfer with valid payload', async ({ request }) => {
+    const skip = transferHappyPathSkipReason();
+    test.skip(!!skip, skip ?? '');
+
+    const payload = baseTransferPayload();
+    const { response, durationMs, body } = await createTransferWithFreshAuthRetry(request, payload);
+    test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');
+    if (response.status() === 404) {
+      test.skip(true, `Transfer account not found: ${JSON.stringify(body).slice(0, 200)}`);
+    }
+
+    expect(response.status(), `Unexpected status: ${JSON.stringify(body).slice(0, 350)}`).toBe(200);
+    expectWithinBudget(durationMs, TRANSFER_BUDGET_MS, 'single transfer');
+    assertSuccessBody(body);
+    assertNoSensitiveFields(body);
+  });
+
   test('amount below minimum (99) should fail', async ({ request }) => {
     const { response, body } = await createTransferWithFreshAuthRetry(request, baseTransferPayload({ amount: 99 }));
     test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');

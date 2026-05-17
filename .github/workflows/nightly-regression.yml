@@ -98,16 +98,36 @@ jobs:
           REQUIRE_E2E_ACCOUNT_CONTEXT: "1"
         run: |
           source .github/scripts/export-playwright-account-env.sh
-          echo "### Account selection (nightly)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Account selection — Playwright (nightly)" >> "$GITHUB_STEP_SUMMARY"
           npm run test:account-selection:ci
 
+      - name: Run Cucumber account-selection (E2E)
+        continue-on-error: true
+        shell: bash
+        env:
+          REQUIRE_E2E_ACCOUNT_CONTEXT: "1"
+        run: |
+          source .github/scripts/export-playwright-account-env.sh
+          echo "### Account selection — Cucumber (nightly)" >> "$GITHUB_STEP_SUMMARY"
+          npm run test:e2e:accounts
+
       - name: Full Playwright suite (excl. @account-selection)
+        if: always()
         shell: bash
         run: |
           source .github/scripts/export-playwright-account-env.sh
           echo "### Nightly full suite" >> "$GITHUB_STEP_SUMMARY"
           echo "Running \`playwright test --grep-invert @account-selection\` (picker suite ran above)." >> "$GITHUB_STEP_SUMMARY"
           npx playwright test --grep-invert "@account-selection"
+
+      - name: QA baseline report
+        if: always()
+        shell: bash
+        run: |
+          npm run qa:baseline || true
+          if [ -f reports/qa-baseline.md ]; then
+            cat reports/qa-baseline.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload reports
         if: always()

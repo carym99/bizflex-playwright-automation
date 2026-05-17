@@ -21,6 +21,8 @@
     "test:pr-gate": "playwright test --grep \"@smoke|@auth|@api-auth\" --grep-invert \"@account-selection\"",
     "test:regression": "playwright test --grep @regression",
     "test:security": "playwright test --grep @security",
+    "qa:baseline": "ts-node scripts/qa-baseline-report.ts",
+    "typecheck": "tsc --noEmit",
     "report": "playwright show-report"
   },
   "devDependencies": {

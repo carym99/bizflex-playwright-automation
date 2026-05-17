@@ -29,3 +29,21 @@ storage/             # generated auth state (global setup)
 ```
 
 See `TESTING_GUIDE.md` for lane tags and CI commands.
+
+## QA baseline (governance)
+
+Generate an inventory vs the pyramid (counts, CI lanes, unused tags, risk gaps):
+
+```bash
+npm run qa:baseline
+```
+
+Output: `reports/qa-baseline.md` (also appended to nightly GitHub step summary when present).
+
+## Typecheck
+
+```bash
+npm run typecheck
+```
+
+Required before merge; CI typecheck job can be added when the team enables it in GitHub Actions.

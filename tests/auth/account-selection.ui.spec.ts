@@ -1,5 +1,6 @@
 /**
- * Account switching after login — `/select-account` picker and dashboard context.
+ * Focused account-selection UI (engineering confidence) — 4 tests.
+ * Broader readable flows: e2e/features/account-selection.feature (Cucumber).
  */
 import { test, expect } from '@playwright/test';
 import { getUiEmail, getUiPassword } from '../../fixtures/auth.fixture';
@@ -14,7 +15,6 @@ import { SelectAccountPage } from '../../pages/SelectAccountPage';
 import { urlIsAccountDashboard } from '../../support/ui/accountRoutes';
 import { attachAccountContextCapture } from '../../support/ui/accountContextApi';
 import { selectAccountOnPicker, assertActiveAccountContext } from '../../support/ui/selectAccount';
-import { loginAndSelectAccount } from '../../support/ui/loginAndSelectAccount';
 import { gotoWithRetry } from '../../support/ui/navigation';
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -31,8 +31,7 @@ async function loginToAccountPicker(page: import('@playwright/test').Page): Prom
   }
   if (stillOnLogin(page)) {
     throw new Error(
-      `Still on /login after submit (url=${page.url()}). ` +
-        `Likely invalid credentials or login API wait mismatch — verify UI_USER_EMAIL/UI_USER_PASSWORD in .env.local.`
+      `Still on /login after submit (url=${page.url()}). Verify UI_USER_EMAIL/UI_USER_PASSWORD in .env.local.`
     );
   }
   await picker.assertPickerShellVisible();
@@ -47,46 +46,13 @@ function stillOnLogin(page: import('@playwright/test').Page): boolean {
 }
 
 test.describe('@auth @account-selection Account selection after login', () => {
-  test('user lands on select-account and sees account picker', async ({ page }) => {
+  test('account picker appears after login', async ({ page }) => {
     await loginToAccountPicker(page);
     const picker = new SelectAccountPage(page);
     await expect(picker.pickerHeading()).toHaveText(/choose an account to continue/i);
     await expect(picker.continueButton()).toBeVisible();
-    await expect(picker.addNewAccountButton()).toBeVisible();
     const count = await picker.countVisibleAccountCards();
     expect(count, 'QA user should have at least one linked account').toBeGreaterThan(0);
-  });
-
-  test('user sees freelance account option when configured', async ({ page }) => {
-    const freelance = resolveFreelanceAccountContextFromEnv();
-    const skip = freelanceEnvSkipReason();
-    test.skip(!!skip, skip ?? '');
-
-    await loginToAccountPicker(page);
-    const picker = new SelectAccountPage(page);
-    await picker.assertConfiguredAccountVisible(freelance);
-    await expect(picker.freelanceCards().first()).toContainText(/freelancer/i);
-  });
-
-  test('user sees business account option when configured', async ({ page }) => {
-    const business = resolveBusinessAccountContextFromEnv('default');
-    const skip = businessEnvSkipReason('default');
-    test.skip(!!skip, skip ?? '');
-
-    await loginToAccountPicker(page);
-    const picker = new SelectAccountPage(page);
-    await picker.assertConfiguredAccountVisible(business);
-    await expect(picker.businessCards().first()).toContainText(/business/i);
-  });
-
-  test('user sees second business account when configured', async ({ page }) => {
-    const business2 = resolveBusinessAccountContextFromEnv('secondary');
-    const skip = businessEnvSkipReason('secondary');
-    test.skip(!!skip, skip ?? '');
-
-    await loginToAccountPicker(page);
-    const picker = new SelectAccountPage(page);
-    await picker.assertConfiguredAccountVisible(business2);
   });
 
   test('user can select freelance account and reach dashboard', async ({ page }) => {
@@ -111,7 +77,7 @@ test.describe('@auth @account-selection Account selection after login', () => {
     await assertActiveAccountContext(page, result);
   });
 
-  test('user can switch from freelance to business via select-account', async ({ page }) => {
+  test('user can switch workspace and active context changes', async ({ page }) => {
     const freelance = resolveFreelanceAccountContextFromEnv();
     const business = resolveBusinessAccountContextFromEnv('default');
     const skipFreelance = freelanceEnvSkipReason();
@@ -127,30 +93,12 @@ test.describe('@auth @account-selection Account selection after login', () => {
     const businessResult = await selectAccountOnPicker(page, { ...business, accountType: 'business' });
     await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
     await assertActiveAccountContext(page, businessResult);
-  });
 
-  test('user can switch between two business accounts when configured', async ({ page }) => {
-    const business1 = resolveBusinessAccountContextFromEnv('default');
-    const business2 = resolveBusinessAccountContextFromEnv('secondary');
-    const skip1 = businessEnvSkipReason('default');
-    const skip2 = businessEnvSkipReason('secondary');
-    test.skip(!!skip1 || !!skip2, skip1 ?? skip2 ?? '');
-
-    await loginToAccountPicker(page);
-    const first = await selectAccountOnPicker(page, { ...business1, accountType: 'business' });
-    await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
-    await assertActiveAccountContext(page, first);
-
-    await gotoWithRetry(page, '/select-account', { waitUntil: 'domcontentloaded' });
-    const second = await selectAccountOnPicker(page, { ...business2, accountType: 'business' });
-    await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
-    await assertActiveAccountContext(page, second);
-  });
-});
-
-test.describe('@auth @account-selection loginAndSelectAccount helper', () => {
-  test('loginAndSelectAccount reaches dashboard with env default context', async ({ page }) => {
-    await loginAndSelectAccount(page, { skipLoginIfAuthenticated: false });
-    await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 45_000 });
+    expect(businessResult.matchedApiRecord?.accountContextId || business.accountContextId).toBeTruthy();
+    if (freelanceResult.matchedApiRecord?.accountContextId && businessResult.matchedApiRecord?.accountContextId) {
+      expect(businessResult.matchedApiRecord.accountContextId).not.toBe(
+        freelanceResult.matchedApiRecord.accountContextId
+      );
+    }
   });
 });

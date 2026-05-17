@@ -122,8 +122,6 @@ export async function ensureAuthenticatedDashboardPage(
         {
           timeout: process.env.CI ? 90_000 : 60_000,
           intervals: [300, 500, 1_000, 2_000],
-          message: async () =>
-            `Dashboard not ready after account context setup.\n  ${await buildAuthenticatedSetupDiagnostics(page, opts)}`,
         }
       )
       .toBe(true);
