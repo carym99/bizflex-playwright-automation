@@ -2,7 +2,7 @@ import { Before, After, Given, When, Then } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 import { E2EWorld } from '../support/world';
 import { LoginPage } from '../../pages/LoginPage';
-import { getUiEmail, getUiPassword } from '../../fixtures/auth.fixture';
+import { getUiEmail, getUiPassword, getValidPassword } from '../../fixtures/auth.fixture';
 import { transactionSelectors } from '../../utils/selectors';
 import { assertRecentTransactionsTableVisible } from '../../utils/dashboard';
 import {

@@ -104,6 +104,8 @@ export default defineConfig({
     {
       name: 'ui-login',
       testMatch: ['auth/**/*.spec.ts'],
+      /** Full UI login per test — serialize in CI to avoid concurrent logins on one QA user. */
+      workers: process.env.CI ? 1 : undefined,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: uiBaseURL,

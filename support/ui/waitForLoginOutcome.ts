@@ -1,6 +1,7 @@
 import { expect, type Page, type Response } from '@playwright/test';
 import { suspendedAccountMessage } from '../../fixtures/auth.fixture';
 import { isBizflexLoginPostResponse } from '../../utils/loginResponse';
+import { isAccountContextsResponseUrl } from './accountContextApi';
 
 export type LoginOutcomeKind =
   | 'select-account'
@@ -30,6 +31,10 @@ function isPostLoginRoute(path: string): LoginOutcomeKind | null {
   if (/^\/account(\/|$)/.test(path)) return 'account';
   if (/^\/(mfa|2fa|verify|otp|two-factor)(\/|$)/.test(path)) return 'mfa';
   return null;
+}
+
+async function accountPickerShellVisible(page: Page): Promise<boolean> {
+  return page.getByText(/choose an account to continue/i).isVisible().catch(() => false);
 }
 
 async function visibleLoginErrorMessage(page: Page): Promise<string | null> {
@@ -144,13 +149,33 @@ function formatOutcomeError(outcome: LoginOutcome, email: string): string {
   }
 }
 
+function stillOnLoginPage(page: Page): boolean {
+  return /^\/login(\/|$)/i.test(pathname(page));
+}
+
 async function probeLoginState(
   page: Page,
-  lastAuthResponse: Response | undefined
+  lastAuthResponse: Response | undefined,
+  contextsLoaded: boolean
 ): Promise<LoginOutcome | null> {
   const route = isPostLoginRoute(pathname(page));
   if (route) {
     return { kind: route, url: page.url() };
+  }
+
+  if (await accountPickerShellVisible(page)) {
+    return { kind: 'select-account', url: page.url() };
+  }
+
+  if (contextsLoaded && (await accountPickerShellVisible(page).catch(() => false))) {
+    return { kind: 'select-account', url: page.url() };
+  }
+
+  if (contextsLoaded && !stillOnLoginPage(page)) {
+    const path = pathname(page);
+    if (path && path !== '/login') {
+      return { kind: 'select-account', url: page.url() };
+    }
   }
 
   if (await suspendedVisible(page)) {
@@ -183,6 +208,7 @@ async function probeLoginState(
 
 /**
  * After submitting the login form, wait for navigation or a definitive API/UI outcome.
+ * Success: /select-account, /account, visible picker heading, or /contexts 200.
  */
 export async function waitForLoginOutcomeAfterSubmit(
   page: Page,
@@ -191,10 +217,14 @@ export async function waitForLoginOutcomeAfterSubmit(
   const timeoutMs = options.timeoutMs ?? (process.env.CI ? 90_000 : 45_000);
   const emailForErrors = options.emailForErrors ?? 'user';
   let lastAuthResponse: Response | undefined;
+  let contextsLoaded = false;
 
   const onResponse = (response: Response) => {
     if (isBizflexLoginPostResponse(response)) {
       lastAuthResponse = response;
+    }
+    if (response.ok() && isAccountContextsResponseUrl(response.url())) {
+      contextsLoaded = true;
     }
   };
   page.on('response', onResponse);
@@ -205,27 +235,33 @@ export async function waitForLoginOutcomeAfterSubmit(
     await expect
       .poll(
         async () => {
-          outcome = await probeLoginState(page, lastAuthResponse);
+          outcome = await probeLoginState(page, lastAuthResponse, contextsLoaded);
           return outcome !== null;
         },
         {
           timeout: timeoutMs,
           intervals: [200, 400, 800, 1_000],
-          message: `Login did not reach /select-account, /account, MFA, or a visible error within ${timeoutMs}ms (url=${page.url()})`,
+          message: `Login did not reach account picker, /account, MFA, or a visible error within ${timeoutMs}ms (url=${page.url()})`,
         }
       )
       .toBe(true);
 
     if (!outcome) {
-      outcome = await probeLoginState(page, lastAuthResponse);
+      outcome = await probeLoginState(page, lastAuthResponse, contextsLoaded);
     }
 
     if (!outcome) {
+      if (stillOnLoginPage(page)) {
+        throw new Error(
+          `Login submit finished but still on /login (url=${page.url()}). ` +
+            `Likely invalid credentials for ${emailForErrors.replace(/(^.).*(@.*$)/, '$1***$2')} ` +
+            `or login API wait mismatch — verify UI_USER_EMAIL/UI_USER_PASSWORD (or TEST_EMAIL/TEST_PASSWORD) and AUTH_API_LOGIN_PATH.`
+        );
+      }
       throw new Error(
         `Login submit timed out after ${timeoutMs}ms — still on ${page.url()}. ` +
-          `Check TEST_EMAIL/TEST_PASSWORD (or UI_USER_* / VALID_USER_*), API_URL (${process.env.API_URL ?? 'unset'}), ` +
-          `AUTH_API_LOGIN_PATH (${process.env.AUTH_API_LOGIN_PATH ?? '/v1/auth/login'}). ` +
-          `No navigation or BizFlex auth login API response detected.`
+          `Check credentials, API_URL (${process.env.API_URL ?? 'unset'}), ` +
+          `AUTH_API_LOGIN_PATH (${process.env.AUTH_API_LOGIN_PATH ?? '/v1/auth/login'}).`
       );
     }
 

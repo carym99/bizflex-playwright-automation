@@ -1,6 +1,19 @@
 # Account context (post-login `/select-account`)
 
-After login, BizFlex routes users to **[`/select-account`](https://bizflex-app.netlify.app/select-account)** to choose a workspace before the dashboard loads. Automation treats account selection as **setup**, not repeated per-spec UI logic.
+**Agent handoff:** For full repo context (CI, fixtures, known issues, continuation prompt), see **[QA_AUTOMATION_HANDOFF.md](./QA_AUTOMATION_HANDOFF.md)**.
+
+After login, BizFlex routes users to **`/select-account`** to choose a workspace before the dashboard loads. Automation treats account selection as **setup**, not repeated per-spec UI logic.
+
+## Validated locally
+
+| Command | Project | Result |
+|---------|---------|--------|
+| `npm run test:account-selection` | `ui-login` | **9 passed**, 0 failed, 0 skipped |
+| `npm run test:account-selection:ci` | `ui-login` (`--workers=1`) | Same suite, CI-safe serialization |
+
+Spec file: `tests/auth/account-selection.ui.spec.ts` — tagged **`@auth @account-selection`**.
+
+CI runs account-selection **once** via `test:account-selection:ci`. Generic `@auth` greps use `--grep-invert "@account-selection"` so the same spec is not executed twice.
 
 ## Flow
 
@@ -11,140 +24,137 @@ flowchart LR
   Pick --> Dashboard["/account dashboard"]
 ```
 
-1. **`npm run auth`** / **`setup` project** — API login → browser storage in `storage/authenticated-user.json` (UI login + account pick using env below).
-2. **`chromium` project** — loads canonical storage; specs call **`prepareAuthenticatedPage(page, testInfo, accountOptions?)`** or use **`authenticatedPage`** fixture.
-3. **Picker resolution** — `resolveSelectAccountToDashboardIfNeeded` / `selectAccountOnPicker` (never assumes “first card” when multiple accounts exist without env criteria).
+Post-login network (typical): `/login` → `/contexts?sortBy=lastUsedAt...` → `/profile` → `/get-user-cards` → `/registration-flags`.
+
+## Type normalization
+
+| Test config | API `/profile` | API `/contexts` | UI picker |
+|-------------|----------------|-----------------|-----------|
+| `freelance` | `individual` | `FREELANCE` | Freelancer |
+| `business` | `business` | `BUSINESS` | Business |
+
+Implemented in `config/accountContext.ts` (`normalizeAccountType`, `accountTypesMatch`).
 
 ## Core APIs
 
-| API | Location | Purpose |
-|-----|----------|---------|
-| `loginAndSelectAccount(page, options)` | `support/ui/loginAndSelectAccount.ts` | Full UI login + picker + dashboard assert |
-| `selectAccountOnPicker(page, options)` | `support/ui/selectAccount.ts` | Picker only (card + Continue) |
-| `prepareAuthenticatedPage(page, testInfo, options?)` | `support/ui/prepareAuthenticatedPage.ts` | Seeded session → dashboard |
-| `SelectAccountPage` | `pages/SelectAccountPage.ts` | POM for picker |
-| `AccountSelectOptions` | `config/accountContext.ts` | `accountType`, `accountName`, `accountId`, `preferLastUsed` |
-
-### Fixtures (`tests/shared/fixtures/account.fixture.ts`)
-
-| Fixture | Behavior |
-|---------|----------|
-| `authenticatedPage` | Worker storage + env/default `accountContext` |
-| `freelancePage` | `E2E_FREELANCE_*` preset |
-| `businessPage` | `E2E_BUSINESS_*` preset |
-| `freshAccountPage` | Empty storage, full `loginAndSelectAccount` |
-| `accountContext` (option) | Per-test override: `test.use({ accountContext: { accountName: '…' } })` |
-
-`tests/shared/fixtures/auth.fixture.ts` re-exports the same `test` / `expect` for backward compatibility.
+| API | Location |
+|-----|----------|
+| `loginAndSelectAccount` | `support/ui/loginAndSelectAccount.ts` |
+| `selectAccountOnPicker` | `support/ui/selectAccount.ts` |
+| `AccountContextApiCapture` | `support/ui/accountContextApi.ts` |
+| `AccountSelectOptions` | `config/accountContext.ts` |
 
 ## Environment variables
 
-### Required (unchanged)
+Copy values from **`/profile`** and **`/contexts`** for your QA user into `.env.local` or GitHub Secrets. **Do not commit** real values.
 
-| Variable | Purpose |
-|----------|---------|
-| `TEST_EMAIL` | Storage generation + default API/UI login |
+### Credentials (required in CI)
+
+| Secret / env | Purpose |
+|--------------|---------|
+| `TEST_EMAIL` | Storage generation + default login |
 | `TEST_PASSWORD` | Paired with `TEST_EMAIL` |
-| `PLAYWRIGHT_BASE_URL` | SPA origin (e.g. `https://bizflex-app.netlify.app` — **no** `/login` suffix) |
-| `API_URL` | API host for auth probe / API tests |
+| `PLAYWRIGHT_BASE_URL` | SPA origin (no `/login` suffix) |
+| `API_URL` | API host (optional; defaults to staging) |
+| `UI_USER_EMAIL` | UI login specs when different from `TEST_EMAIL` |
+| `UI_USER_PASSWORD` | UI login password |
 
-### Account picker (CI secrets / `.env.local`)
+### Account picker (required for full account-selection CI)
 
-| Variable | Purpose |
-|----------|---------|
-| `E2E_SELECT_ACCOUNT_NAME` | Default card name substring (e.g. `France Spain`) |
-| `E2E_SELECT_ACCOUNT_TYPE` | `freelance` / `freelancer` / `business` |
-| `E2E_DEFAULT_ACCOUNT_ID` | `data-testid="select-account-option-{id}"` when app provides testids |
-| `E2E_PREFER_LAST_USED_ACCOUNT` | `1` to pick LAST USED card when name/type unset |
-| `E2E_FREELANCE_ACCOUNT_NAME` | Freelance preset for `freelancePage` / switch tests |
-| `E2E_FREELANCE_ACCOUNT_ID` | Optional id + testid |
-| `E2E_BUSINESS_ACCOUNT_NAME` | Business preset for `businessPage` |
-| `E2E_BUSINESS_ACCOUNT_ID` | Optional id + testid |
-| `E2E_BUSINESS_ACCOUNT_NAME_2` | Second business for switch tests |
-| `E2E_BUSINESS_ACCOUNT_ID_2` | Second business id |
+| Secret / env | Purpose |
+|--------------|---------|
+| `E2E_SELECT_ACCOUNT_TYPE` | `freelance` or `business` — default for `npm run auth` |
+| `E2E_SELECT_ACCOUNT_NAME` | Default display name |
+| `E2E_SELECT_ACCOUNT_CONTEXT_ID` | Default `accountContextId` |
+| `E2E_SELECT_ACCOUNT_ID` | Default numeric account id (optional) |
+| `E2E_FREELANCE_ACCOUNT_NAME` | Freelance card name |
+| `E2E_FREELANCE_ACCOUNT_ID` | Profile account `id` |
+| `E2E_FREELANCE_ACCOUNT_CONTEXT_ID` | Freelance context UUID |
+| `E2E_FREELANCE_WALLET_ID` | Wallet id (optional) |
+| `E2E_FREELANCE_BUSINESS_ID` | Context `businessId` on freelance row (optional) |
+| `E2E_BUSINESS_ACCOUNT_NAME` | Business name as returned by API (spacing may differ from UI) |
+| `E2E_BUSINESS_ACCOUNT_ID` | Business profile account `id` |
+| `E2E_BUSINESS_ACCOUNT_CONTEXT_ID` | Business context UUID |
+| `E2E_BUSINESS_ID` | `businessId` |
+| `E2E_BUSINESS_WALLET_ID` | Wallet id for transfers |
+| `E2E_BUSINESS_ACCOUNT_NAME_2` | Second business (optional) |
+| `E2E_BUSINESS_ACCOUNT_CONTEXT_ID_2` | Second business context (optional) |
+| `E2E_BUSINESS_ID_2` | Second `businessId` (optional) |
 
-### Transfer API (separate from UI picker)
+`E2E_BUSINESS_ACCOUNT_ID_2` and `E2E_BUSINESS_WALLET_ID_2` are also supported when set.
 
-| Variable | Purpose |
-|----------|---------|
-| `TRANSFER_ACCOUNT_ID` | Debiting `accountId` in API payload (must belong to logged-in user) |
-| `VALID_USER_EMAIL` / `VALID_USER_PASSWORD` | Preferred API login for transfer specs |
+## CI/CD
 
-## Storage state
+Workflows load secrets at **job** level and source `.github/scripts/export-playwright-account-env.sh` before `npm run auth` and tests.
 
-| Path | Gitignored | Notes |
-|------|------------|--------|
-| `storage/authenticated-user.json` | Yes | Canonical; generated with **env default account** at auth time |
-| `storage/authenticated-user-worker-*.json` | Yes | Per-worker clones |
-| `storage/authenticated-session-seed.json` | Yes | `sessionStorage` replay |
-| `.auth/` | Yes (if used) | Optional profile dir — same rules as `storage/` |
+| Workflow | When | Account-selection | Remaining tests |
+|----------|------|-------------------|-----------------|
+| `ci-smoke.yml` | Pull requests | `npm run test:account-selection:ci` | `--grep "@smoke\|@auth\|@api-auth" --grep-invert "@account-selection"` |
+| `ci-full.yml` | Push to `main` | `test:account-selection:ci` on **auth** lane only | **auth** lane: `--grep "@auth" --grep-invert "@account-selection"`; other lanes unchanged |
+| `nightly-regression.yml` | Schedule / manual | `test:account-selection:ci` first | `playwright test --grep-invert "@account-selection"` |
 
-**Do not commit** generated JSON. CI runs `npm run auth` with secrets before tests.
+### Commands CI runs
 
-Per-account storage files (e.g. `.auth/freelance.json`) are **not required**; use env + `freelancePage` / `businessPage` or `accountContext` option instead. Add profile-specific `npm run auth` only if you need faster cold starts later.
+```bash
+source .github/scripts/export-playwright-account-env.sh
+npm run auth
+npm run test:account-selection:ci
+
+# PR smoke gate (no duplicate account-selection)
+npx playwright test --grep "@smoke|@auth|@api-auth" --grep-invert "@account-selection"
+
+# ci-full auth lane
+npx playwright test --grep "@auth" --grep-invert "@account-selection"
+
+# nightly (all projects except @account-selection)
+npx playwright test --grep-invert "@account-selection"
+```
+
+Tag constants: `config/tags.ts` (`Tag.accountSelection`, `accountSelectionGrepInvert`).
+
+### Parallel execution
+
+- **`ui-login` project**: `workers: 1` in CI (`playwright.config.ts`) — each test performs a full UI login; avoids concurrent sessions on one QA user.
+- **Matrix jobs** (`smoke`, `auth`, `api-auth`, `regression`) run in **parallel** across lanes; only the `auth` lane runs account-selection explicitly (plus PR/nightly steps).
+- **Generated storage** (`storage/*.json`, `.auth/`) remains **gitignored**; CI creates fresh files via `npm run auth` each run.
+
+### GitHub repository secrets checklist
+
+Add under **Settings → Secrets and variables → Actions → Repository secrets**:
+
+1. `TEST_EMAIL`, `TEST_PASSWORD`
+2. `PLAYWRIGHT_BASE_URL`, `API_URL` (optional if defaults are fine)
+3. `UI_USER_EMAIL`, `UI_USER_PASSWORD` (if UI user differs from `TEST_*`)
+4. All `E2E_*` rows in the table above (mirror your validated `.env.local`)
+
+Optional: `VALID_USER_*`, `MFA_USER_*`, transfer vars for regression API specs.
 
 ## Run locally
 
 ```bash
-# 1. Configure .env.local (see .env.example)
-# 2. Refresh storage (picks account using E2E_* at auth time)
+cp .env.example .env.local   # fill from /profile + /contexts
 npm run auth
+npm run test:account-selection:ci
 
-# 3. Run suites
-npm run test:auth          # includes account-selection.ui.spec.ts
-npm run test:smoke
-npm run test:regression
+# Mirror PR gate (account-selection + other @auth, no duplicate)
+npm run test:pr-gate
 
-# Account selection specs only (ui-login project)
-npx playwright test tests/auth/account-selection.ui.spec.ts --project=ui-login
+# List what PR gate would run (smoke + auth excl. account-selection + api-auth)
+npx playwright test --list --grep "@smoke|@auth|@api-auth" --grep-invert "@account-selection"
 ```
 
-## CI/CD
+### Cucumber (readable for product / QA)
 
-Existing workflows unchanged in structure:
+`e2e/features/account-selection.feature` describes the same flows in plain language. Uses the same `.env.local` as Playwright:
 
-1. Verify `TEST_EMAIL` / `TEST_PASSWORD`
-2. `npm run auth` — pass `E2E_SELECT_ACCOUNT_NAME`, `E2E_FREELANCE_*`, `E2E_BUSINESS_*` as repository **secrets** when QA accounts differ per environment
-3. Run Playwright matrix lanes
+```bash
+npm run test:e2e:accounts
+```
 
-Add repository secrets for account names used in your QA tenant (see table above). Without them, multi-account users fail fast with a clear message instead of clicking the wrong row.
+Scenarios tagged `@requires-freelance-config`, `@requires-business-config`, or `@requires-second-business-config` skip when the matching `E2E_*` variables are not set. See [QA_AUTOMATION_HANDOFF.md](./QA_AUTOMATION_HANDOFF.md).
 
-## Test classification
+## App recommendations
 
-| Category | Examples | Account handling |
-|----------|----------|------------------|
-| Account-agnostic | Many API specs, login validation | No picker |
-| Default dashboard | `dashboard.smoke`, payment-link UI | Env default via storage + `prepareAuthenticatedPage` |
-| Freelance-only | (tag when added) | `freelancePage` or `accountContext: { accountType: 'freelance' }` |
-| Business-only | Business-specific flows | `businessPage` or explicit name |
-| Both contexts | Same assertion, two workspaces | Parameterize or two describes with different fixtures — **do not** duplicate entire suites blindly |
-
-Dedicated coverage: `tests/auth/account-selection.ui.spec.ts` (`@auth`).
-
-## Backend / QA data assumptions
-
-Before UI tests run, the **TEST_EMAIL** user must:
-
-- Complete login successfully
-- See at least one account on `/select-account`
-- For switch tests: have **both** freelance and business accounts named in env
-- For transfer API: `TRANSFER_ACCOUNT_ID` must be an account that user may debit (not PND)
-
-Coordinate with backend when login or account linking changes — refresh storage and update env names.
-
-## App recommendations (stable automation)
-
-Add to each picker row:
-
+- `data-testid="select-account-context-{accountContextId}"`
 - `data-testid="select-account-option-{accountId}"`
-- Optional `data-testid="select-account-continue"`
-
-Avoid relying on Chakra `css-*` class names (see SelectorsHub note in QA review).
-
-## Manual follow-up
-
-- [ ] Set CI secrets for `E2E_SELECT_ACCOUNT_NAME` / freelance / business names for your tenant
-- [ ] Confirm `/select-account` is reachable when already logged in (for switch tests)
-- [ ] Align `TRANSFER_ACCOUNT_ID` with `VALID_USER_EMAIL` wallet in staging
-- [ ] Tag business-only / freelance-only specs as you split suites
-- [ ] Add in-app account switcher tests when product exposes switch UI (vs `goto('/select-account')`)
+- `data-testid="active-account-context-id"` on dashboard shell

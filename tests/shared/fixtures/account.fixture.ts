@@ -10,10 +10,8 @@ import {
   getAuthenticatedStorageState,
   getAuthenticatedStorageStatePathForWorker,
 } from '../../../support/auth/storageState';
-import { assertStillAuthenticated } from '../../../support/ui/assertStillAuthenticated';
-import { installAuthSessionSeedInitScript, prepareAuthenticatedPage } from '../../../support/ui/prepareAuthenticatedPage';
-import { urlIsAccountDashboard } from '../../../support/ui/accountRoutes';
-import { resolveSelectAccountToDashboardIfNeeded } from '../../../support/ui/selectAccount';
+import { prepareAuthenticatedPage } from '../../../support/ui/prepareAuthenticatedPage';
+import { ensureAuthenticatedDashboardPage } from '../../../support/ui/ensureAuthenticatedDashboard';
 import { loginAndSelectAccount } from '../../../support/ui/loginAndSelectAccount';
 
 export type AccountFixtureOptions = {
@@ -40,22 +38,7 @@ async function bootstrapAuthenticatedPage(
     const pg = await ctx.newPage();
 
     try {
-      await installAuthSessionSeedInitScript(pg);
-      await pg.goto('/account', {
-        waitUntil: 'domcontentloaded',
-        timeout: process.env.CI ? 120_000 : 90_000,
-      });
-      await pg.waitForLoadState('domcontentloaded');
-
-      if (/\/login/i.test(pg.url())) {
-        await ctx.close().catch(() => {});
-        if (attempt === 0) continue;
-        throw new Error('[account-fixture] Landed on /login — refresh storage or run npm run auth');
-      }
-
-      await resolveSelectAccountToDashboardIfNeeded(pg, accountContext);
-      await expect(pg).toHaveURL(urlIsAccountDashboard, { timeout: 60_000 });
-      await assertStillAuthenticated(pg, testInfo, `account-fixture-${attempt}`);
+      await ensureAuthenticatedDashboardPage(pg, testInfo, accountContext);
       return { context: ctx, page: pg };
     } catch (err) {
       await ctx.close().catch(() => {});

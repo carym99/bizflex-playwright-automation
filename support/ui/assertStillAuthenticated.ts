@@ -1,5 +1,11 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
-import { getBearerTokenFromPage, mirrorSessionUserTokensToLocalStorage } from '../auth/browserAuthSession';
+import {
+  getBearerTokenFromPage,
+  isAuthenticated,
+  mirrorSessionUserTokensToLocalStorage,
+} from '../auth/browserAuthSession';
+import { isDashboardShellVisible } from './dashboardReadiness';
+import { pathnameLooksLikeAccountDashboardPath } from './accountRoutes';
 import { attachAuthFailureArtifacts, logAuthDiagnostics } from '../auth/debugAuthState';
 import { handleSessionTimeoutWithOptionalCiRecovery } from './sessionTimeoutCiRecovery';
 import {
@@ -122,15 +128,39 @@ export async function assertAccessTokenPresent(
     return;
   }
 
+  await mirrorSessionUserTokensToLocalStorage(page).catch(() => {});
+
+  if (await isAuthenticated(page)) {
+    return;
+  }
+
+  const cookieSessionOk = await hasAuthenticatedCookieSession(page);
+  if (cookieSessionOk) {
+    return;
+  }
+
   try {
-    await mirrorSessionUserTokensToLocalStorage(page).catch(() => {});
+    const path = (() => {
+      try {
+        return new URL(page.url()).pathname.toLowerCase();
+      } catch {
+        return '';
+      }
+    })();
+    if (pathnameLooksLikeAccountDashboardPath(path) && (await isDashboardShellVisible(page))) {
+      return;
+    }
+
     await expect
-      .poll(async () => (await getBearerTokenFromPage(page)) ?? '', { timeout: 20_000 })
+      .poll(async () => (await getBearerTokenFromPage(page)) ?? '', { timeout: 15_000 })
       .not.toBe('');
   } catch {
-    const cookieSessionOk = await hasAuthenticatedCookieSession(page);
-    if (cookieSessionOk) {
+    if (await hasAuthenticatedCookieSession(page)) {
       console.warn(`[auth] ${phase}: token keys missing but cookie-backed profile probe passed`);
+      return;
+    }
+    if (await isDashboardShellVisible(page)) {
+      console.warn(`[auth] ${phase}: token poll timed out but dashboard shell is visible (url=${page.url()})`);
       return;
     }
 

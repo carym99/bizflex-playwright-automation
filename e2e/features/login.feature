@@ -1,5 +1,8 @@
 Feature: Secure fintech authentication
 
+  # Multi-workspace customers: see e2e/features/account-selection.feature for
+  # "Choose a workspace after login" scenarios (account picker after sign-in).
+
   # The MFA scenario below is intentionally commented out until mailbox/OTP
   # integration is wired for E2E (e.g. MFA_TEST_OTP or stable OTP retrieval).
   # Re-enable it when the pipeline is ready; MFA contract tests stay in Playwright API specs.

@@ -15,8 +15,9 @@ export function pathnameLooksLikeAccountDashboardPath(pathname: string): boolean
 }
 
 /** Use with `expect(page).toHaveURL(...)` so `/select-account` is not mistaken for `/account`. */
-export function urlIsAccountDashboard(url: URL): boolean {
-  return pathnameLooksLikeAccountDashboardPath(url.pathname);
+export function urlIsAccountDashboard(url: URL | string): boolean {
+  const pathname = typeof url === 'string' ? new URL(url).pathname : url.pathname;
+  return pathnameLooksLikeAccountDashboardPath(pathname);
 }
 
 /** Authenticated app shell: picker, dashboard, or other known logged-in routes (never `/login`). */

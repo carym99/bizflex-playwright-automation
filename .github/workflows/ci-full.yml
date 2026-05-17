@@ -12,7 +12,7 @@ concurrency:
 jobs:
   matrix-lanes:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -21,6 +21,39 @@ jobs:
           - auth
           - api-auth
           - regression
+
+    env:
+      CI: true
+      API_URL: ${{ secrets.API_URL }}
+      PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
+      VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
+      UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
+      UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
+      MFA_USER_EMAIL: ${{ secrets.MFA_USER_EMAIL }}
+      MFA_USER_PASSWORD: ${{ secrets.MFA_USER_PASSWORD }}
+      E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
+      E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
+      E2E_SELECT_ACCOUNT_ID: ${{ secrets.E2E_SELECT_ACCOUNT_ID }}
+      E2E_SELECT_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_SELECT_ACCOUNT_CONTEXT_ID }}
+      E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
+      E2E_DEFAULT_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_CONTEXT_ID }}
+      E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
+      E2E_FREELANCE_ACCOUNT_ID: ${{ secrets.E2E_FREELANCE_ACCOUNT_ID }}
+      E2E_FREELANCE_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_FREELANCE_ACCOUNT_CONTEXT_ID }}
+      E2E_FREELANCE_WALLET_ID: ${{ secrets.E2E_FREELANCE_WALLET_ID }}
+      E2E_FREELANCE_BUSINESS_ID: ${{ secrets.E2E_FREELANCE_BUSINESS_ID }}
+      E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
+      E2E_BUSINESS_ACCOUNT_ID: ${{ secrets.E2E_BUSINESS_ACCOUNT_ID }}
+      E2E_BUSINESS_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_BUSINESS_ACCOUNT_CONTEXT_ID }}
+      E2E_BUSINESS_ID: ${{ secrets.E2E_BUSINESS_ID }}
+      E2E_BUSINESS_WALLET_ID: ${{ secrets.E2E_BUSINESS_WALLET_ID }}
+      E2E_BUSINESS_ACCOUNT_NAME_2: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME_2 }}
+      E2E_BUSINESS_ACCOUNT_ID_2: ${{ secrets.E2E_BUSINESS_ACCOUNT_ID_2 }}
+      E2E_BUSINESS_ACCOUNT_CONTEXT_ID_2: ${{ secrets.E2E_BUSINESS_ACCOUNT_CONTEXT_ID_2 }}
+      E2E_BUSINESS_ID_2: ${{ secrets.E2E_BUSINESS_ID_2 }}
+      E2E_BUSINESS_WALLET_ID_2: ${{ secrets.E2E_BUSINESS_WALLET_ID_2 }}
+      FAILED_LOGIN_BUDGET_MS: "7000"
 
     steps:
       - uses: actions/checkout@v5
@@ -74,61 +107,37 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Refresh authenticated storage (same as npm test pre-step)
-        env:
-          CI: true
-          API_URL: ${{ secrets.API_URL }}
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
-          TEST_EMAIL: ${{ env.TEST_EMAIL }}
-          TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
-          VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
-          VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
-          UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
-          UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
-          E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
-          E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
-          E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
-          E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
-          E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
+      - name: Refresh authenticated storage (npm run auth)
         shell: bash
         run: |
-          export API_URL="${API_URL:-https://bizflex.onrender.com}"
-          export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
-          export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
+          source .github/scripts/export-playwright-account-env.sh
           npm run auth
 
-      - name: Run Playwright Tests
+      - name: Run account-selection suite (auth lane only)
+        if: matrix.lane == 'auth'
+        shell: bash
         env:
-          CI: true
-          API_URL: ${{ secrets.API_URL }}
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
-          TEST_EMAIL: ${{ env.TEST_EMAIL }}
-          TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
-          VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
-          VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
-          UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
-          UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
-          MFA_USER_EMAIL: ${{ secrets.MFA_USER_EMAIL }}
-          MFA_USER_PASSWORD: ${{ secrets.MFA_USER_PASSWORD }}
-          E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
-          E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
-          E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
-          E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
-          E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
-          FAILED_LOGIN_BUDGET_MS: "7000"
+          REQUIRE_E2E_ACCOUNT_CONTEXT: "1"
+        run: |
+          source .github/scripts/export-playwright-account-env.sh
+          echo "### Account selection (@auth lane)" >> "$GITHUB_STEP_SUMMARY"
+          npm run test:account-selection:ci
+
+      - name: Run Playwright Tests
         shell: bash
         run: |
-          export API_URL="${API_URL:-https://bizflex.onrender.com}"
-          export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
-          export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
-
+          source .github/scripts/export-playwright-account-env.sh
           echo "## Lane @${{ matrix.lane }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- HTML/JUnit under artifact **playwright-report-${{ matrix.lane }}**" >> "$GITHUB_STEP_SUMMARY"
-
-          echo "Listing tests for lane @${{ matrix.lane }}..."
-          npx playwright test --list --grep "@${{ matrix.lane }}"
-
-          npx playwright test --grep "@${{ matrix.lane }}"
+          if [ "${{ matrix.lane }}" = "auth" ]; then
+            echo "Auth lane: \`@auth\` with \`--grep-invert @account-selection\` (picker suite runs in prior step)" >> "$GITHUB_STEP_SUMMARY"
+            npx playwright test --list --grep "@auth" --grep-invert "@account-selection"
+            npx playwright test --grep "@auth" --grep-invert "@account-selection"
+          else
+            echo "Listing tests for lane @${{ matrix.lane }}..."
+            npx playwright test --list --grep "@${{ matrix.lane }}"
+            npx playwright test --grep "@${{ matrix.lane }}"
+          fi
 
       - name: Upload Playwright report
         if: always()

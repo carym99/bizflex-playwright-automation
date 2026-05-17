@@ -5,6 +5,8 @@
 export const Tag = {
   smoke: '@smoke',
   auth: '@auth',
+  /** Dedicated account-picker gate — run via `npm run test:account-selection:ci`, excluded from generic @auth grep in CI. */
+  accountSelection: '@account-selection',
   apiAuth: '@api-auth',
   regression: '@regression',
   payments: '@payments',
@@ -23,3 +25,6 @@ export const laneToGrep = (lane: 'smoke' | 'auth' | 'api-auth' | 'regression'): 
  * Playwright `--grep` accepts a regex.
  */
 export const prSmokeGateGrep = `${Tag.smoke}|${Tag.auth}|${Tag.apiAuth}`;
+
+/** PR / @auth lane: invert so account-selection runs only in `test:account-selection:ci`. */
+export const accountSelectionGrepInvert = Tag.accountSelection;

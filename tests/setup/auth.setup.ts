@@ -18,11 +18,8 @@ import {
   mirrorSessionUserTokensToLocalStorage,
   pathnameIsLoginRoute,
 } from '../../support/auth/browserAuthSession';
-import { gotoWithRetry } from '../../support/ui/navigation';
-import { installAuthSessionSeedInitScript } from '../../support/ui/prepareAuthenticatedPage';
-import { urlIsAccountDashboard } from '../../support/ui/accountRoutes';
 import { mergeAccountSelectOptions } from '../../config/accountContext';
-import { resolveSelectAccountToDashboardIfNeeded } from '../../support/ui/selectAccount';
+import { ensureAuthenticatedDashboardPage } from '../../support/ui/ensureAuthenticatedDashboard';
 
 setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo) => {
   setup.setTimeout(180_000);
@@ -46,22 +43,14 @@ setup('prepare and verify authenticated storage', async ({}, testInfo: TestInfo)
       storageState: storagePath,
     });
     page = await context.newPage();
-    await installAuthSessionSeedInitScript(page);
 
-    await gotoWithRetry(page, '/account', {
-      waitUntil: 'domcontentloaded',
-      timeout: process.env.CI ? 120_000 : 90_000,
-    });
-    await page.waitForLoadState('domcontentloaded');
+    const accountOptions = mergeAccountSelectOptions();
+    await ensureAuthenticatedDashboardPage(page, testInfo, accountOptions);
 
     if (process.env.CI) {
       const accessProbe = Boolean(await getBearerTokenFromPage(page));
-      console.log('[auth.setup] after /account url=', page.url(), 'accessTokenPresent=', accessProbe);
+      console.log('[auth.setup] dashboard ready url=', page.url(), 'accessTokenPresent=', accessProbe);
     }
-
-    await resolveSelectAccountToDashboardIfNeeded(page, mergeAccountSelectOptions());
-
-    await expect(page).toHaveURL(urlIsAccountDashboard, { timeout: 60_000 });
 
     // Under heavy parallel load, auth hydration can lag behind initial /account render.
     // For setup we require browser-auth state (not a repeated profile API probe).

@@ -10,7 +10,39 @@ concurrency:
 jobs:
   smoke-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
+    env:
+      CI: true
+      API_URL: ${{ secrets.API_URL }}
+      PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
+      VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
+      UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
+      UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
+      MFA_USER_EMAIL: ${{ secrets.MFA_USER_EMAIL }}
+      MFA_USER_PASSWORD: ${{ secrets.MFA_USER_PASSWORD }}
+      E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
+      E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
+      E2E_SELECT_ACCOUNT_ID: ${{ secrets.E2E_SELECT_ACCOUNT_ID }}
+      E2E_SELECT_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_SELECT_ACCOUNT_CONTEXT_ID }}
+      E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
+      E2E_DEFAULT_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_CONTEXT_ID }}
+      E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
+      E2E_FREELANCE_ACCOUNT_ID: ${{ secrets.E2E_FREELANCE_ACCOUNT_ID }}
+      E2E_FREELANCE_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_FREELANCE_ACCOUNT_CONTEXT_ID }}
+      E2E_FREELANCE_WALLET_ID: ${{ secrets.E2E_FREELANCE_WALLET_ID }}
+      E2E_FREELANCE_BUSINESS_ID: ${{ secrets.E2E_FREELANCE_BUSINESS_ID }}
+      E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
+      E2E_BUSINESS_ACCOUNT_ID: ${{ secrets.E2E_BUSINESS_ACCOUNT_ID }}
+      E2E_BUSINESS_ACCOUNT_CONTEXT_ID: ${{ secrets.E2E_BUSINESS_ACCOUNT_CONTEXT_ID }}
+      E2E_BUSINESS_ID: ${{ secrets.E2E_BUSINESS_ID }}
+      E2E_BUSINESS_WALLET_ID: ${{ secrets.E2E_BUSINESS_WALLET_ID }}
+      E2E_BUSINESS_ACCOUNT_NAME_2: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME_2 }}
+      E2E_BUSINESS_ACCOUNT_ID_2: ${{ secrets.E2E_BUSINESS_ACCOUNT_ID_2 }}
+      E2E_BUSINESS_ACCOUNT_CONTEXT_ID_2: ${{ secrets.E2E_BUSINESS_ACCOUNT_CONTEXT_ID_2 }}
+      E2E_BUSINESS_ID_2: ${{ secrets.E2E_BUSINESS_ID_2 }}
+      E2E_BUSINESS_WALLET_ID_2: ${{ secrets.E2E_BUSINESS_WALLET_ID_2 }}
+      FAILED_LOGIN_BUDGET_MS: "7000"
 
     steps:
       - uses: actions/checkout@v5
@@ -56,57 +88,30 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Refresh authenticated storage (same as npm test pre-step)
-        env:
-          CI: true
-          API_URL: ${{ secrets.API_URL }}
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
-          TEST_EMAIL: ${{ env.TEST_EMAIL }}
-          TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
-          VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
-          VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
-          UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
-          UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
-          E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
-          E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
-          E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
-          E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
-          E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
+      - name: Refresh authenticated storage (npm run auth)
         shell: bash
         run: |
-          export API_URL="${API_URL:-https://bizflex.onrender.com}"
-          export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
-          export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
+          source .github/scripts/export-playwright-account-env.sh
           npm run auth
 
-      - name: Run PR smoke gate (@smoke | @auth | @api-auth)
+      - name: Run account-selection suite (ui-login, workers=1)
+        shell: bash
         env:
-          CI: true
-          API_URL: ${{ secrets.API_URL }}
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
-          TEST_EMAIL: ${{ env.TEST_EMAIL }}
-          TEST_PASSWORD: ${{ env.TEST_PASSWORD }}
-          VALID_USER_EMAIL: ${{ secrets.VALID_USER_EMAIL }}
-          VALID_USER_PASSWORD: ${{ secrets.VALID_USER_PASSWORD }}
-          UI_USER_EMAIL: ${{ secrets.UI_USER_EMAIL }}
-          UI_USER_PASSWORD: ${{ secrets.UI_USER_PASSWORD }}
-          MFA_USER_EMAIL: ${{ secrets.MFA_USER_EMAIL }}
-          MFA_USER_PASSWORD: ${{ secrets.MFA_USER_PASSWORD }}
-          E2E_SELECT_ACCOUNT_NAME: ${{ secrets.E2E_SELECT_ACCOUNT_NAME }}
-          E2E_SELECT_ACCOUNT_TYPE: ${{ secrets.E2E_SELECT_ACCOUNT_TYPE }}
-          E2E_DEFAULT_ACCOUNT_ID: ${{ secrets.E2E_DEFAULT_ACCOUNT_ID }}
-          E2E_FREELANCE_ACCOUNT_NAME: ${{ secrets.E2E_FREELANCE_ACCOUNT_NAME }}
-          E2E_BUSINESS_ACCOUNT_NAME: ${{ secrets.E2E_BUSINESS_ACCOUNT_NAME }}
-          FAILED_LOGIN_BUDGET_MS: "7000"
+          REQUIRE_E2E_ACCOUNT_CONTEXT: "1"
+        run: |
+          source .github/scripts/export-playwright-account-env.sh
+          echo "### Account selection" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`npm run test:account-selection:ci\` — \`tests/auth/account-selection.ui.spec.ts\`" >> "$GITHUB_STEP_SUMMARY"
+          npm run test:account-selection:ci
+
+      - name: Run PR smoke gate (@smoke | @auth | @api-auth, excl. @account-selection)
         shell: bash
         run: |
-          export API_URL="${API_URL:-https://bizflex.onrender.com}"
-          export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-https://bizflex-app.netlify.app}"
-          export BASE_URL="${BASE_URL:-${PLAYWRIGHT_BASE_URL}}"
+          source .github/scripts/export-playwright-account-env.sh
           echo "### PR smoke gate" >> "$GITHUB_STEP_SUMMARY"
-          echo "Grep: \`@smoke|@auth|@api-auth\` (see \`config/tags.ts\` → \`prSmokeGateGrep\`)" >> "$GITHUB_STEP_SUMMARY"
-          npx playwright test --list --grep "@smoke|@auth|@api-auth"
-          npx playwright test --grep "@smoke|@auth|@api-auth"
+          echo "Grep: \`@smoke|@auth|@api-auth\` with \`--grep-invert @account-selection\` (see \`config/tags.ts\`)" >> "$GITHUB_STEP_SUMMARY"
+          npx playwright test --list --grep "@smoke|@auth|@api-auth" --grep-invert "@account-selection"
+          npx playwright test --grep "@smoke|@auth|@api-auth" --grep-invert "@account-selection"
 
       - name: Upload Playwright report
         if: always()

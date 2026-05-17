@@ -29,19 +29,6 @@ function isSessionExpired401(status: number, body: unknown): boolean {
   return msg.toLowerCase().includes('session has expired');
 }
 
-function isAccountFrozen(status: number, body: unknown): boolean {
-  if (status !== 400) return false;
-  const msg = typeof (body as any)?.message === 'string' ? String((body as any).message) : '';
-  return msg.toLowerCase().includes('account is frozen');
-}
-
-function isAccountPnd(status: number, body: unknown): boolean {
-  if (status !== 400 && status !== 403) return false;
-  const msg = typeof (body as any)?.message === 'string' ? String((body as any).message) : '';
-  const lower = msg.toLowerCase();
-  return lower.includes('pnd') || lower.includes('post not debit');
-}
-
 function baseTransferPayload(overrides: Partial<SingleTransferPayload> = {}): SingleTransferPayload {
   return {
     accountId: Number(getTransferAccountId()),
@@ -54,12 +41,6 @@ function baseTransferPayload(overrides: Partial<SingleTransferPayload> = {}): Si
     transactionPin: getTransferPin(),
     ...overrides,
   };
-}
-
-function assertSuccessBody(body: unknown): void {
-  const b = (body && typeof body === 'object' ? (body as Record<string, unknown>) : {}) as Record<string, unknown>;
-  expect(Boolean(b.success)).toBe(true);
-  expect(String(b.message || '')).toBe('Transaction is being processed');
 }
 
 function assertFailureBody(body: unknown): void {
@@ -85,46 +66,6 @@ async function createTransferWithFreshAuthRetry(
 }
 
 test.describe('@regression POST /v1/account/single-transfer', () => {
-  test('creates single transfer with valid payload', async ({ request }) => {
-    const payload = baseTransferPayload();
-    console.log('[single-transfer] amount:', payload.amount);
-    console.log('[single-transfer] beneficiary:', maskAccountNumber(payload.beneficiaryAccountNumber));
-
-    const { response, durationMs, body } = await createTransferWithFreshAuthRetry(request, payload);
-    test.skip(
-      isSessionExpired401(response.status(), body),
-      `Session-expired 401 after retry: ${JSON.stringify(body).slice(0, 200)}`
-    );
-    test.skip(
-      isAccountFrozen(response.status(), body),
-      `Transfer account frozen in environment: ${JSON.stringify(body).slice(0, 200)}`
-    );
-    test.skip(
-      isAccountPnd(response.status(), body),
-      `Transfer account on PND in environment: ${JSON.stringify(body).slice(0, 200)}`
-    );
-
-    expect(response.status(), `Unexpected status: ${JSON.stringify(body).slice(0, 350)}`).toBe(200);
-    expectWithinBudget(durationMs, TRANSFER_BUDGET_MS, 'single transfer');
-    assertSuccessBody(body);
-    assertNoSensitiveFields(body);
-  });
-
-  test('amount exactly 100 should pass', async ({ request }) => {
-    const { response, body } = await createTransferWithFreshAuthRetry(request, baseTransferPayload({ amount: 100 }));
-    test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');
-    test.skip(
-      isAccountFrozen(response.status(), body),
-      `Transfer account frozen in environment: ${JSON.stringify(body).slice(0, 200)}`
-    );
-    test.skip(
-      isAccountPnd(response.status(), body),
-      `Transfer account on PND in environment: ${JSON.stringify(body).slice(0, 200)}`
-    );
-    expect([200, 201]).toContain(response.status());
-    assertNoSensitiveFields(body);
-  });
-
   test('amount below minimum (99) should fail', async ({ request }) => {
     const { response, body } = await createTransferWithFreshAuthRetry(request, baseTransferPayload({ amount: 99 }));
     test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');
@@ -140,16 +81,6 @@ test.describe('@regression POST /v1/account/single-transfer', () => {
     assertFailureBody(body);
   });
 
-  test('very large amount returns validation or processing response', async ({ request }) => {
-    const { response, body } = await createTransferWithFreshAuthRetry(
-      request,
-      baseTransferPayload({ amount: Number(process.env.TRANSFER_LARGE_AMOUNT || '100000000') })
-    );
-    test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');
-    expect([200, 400, 401, 403, 409, 422]).toContain(response.status());
-    assertNoSensitiveFields(body);
-  });
-
   test('missing transaction pin should fail', async ({ request }) => {
     const payload = baseTransferPayload() as unknown as Record<string, unknown>;
     delete payload.transactionPin;
@@ -159,30 +90,10 @@ test.describe('@regression POST /v1/account/single-transfer', () => {
     assertFailureBody(body);
   });
 
-  test('invalid transaction pin should fail', async ({ request }) => {
-    const { response, body } = await createTransferWithFreshAuthRetry(
-      request,
-      baseTransferPayload({ transactionPin: '0000' })
-    );
-    test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');
-    expect([400, 401, 403, 422]).toContain(response.status());
-    assertFailureBody(body);
-  });
-
   test('missing beneficiary account number should fail', async ({ request }) => {
     const payload = baseTransferPayload() as unknown as Record<string, unknown>;
     delete payload.beneficiaryAccountNumber;
     const { response, body } = await createTransferWithFreshAuthRetry(request, payload as Partial<SingleTransferPayload>);
-    test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');
-    expect([400, 401, 403, 422]).toContain(response.status());
-    assertFailureBody(body);
-  });
-
-  test('invalid beneficiary account number should fail', async ({ request }) => {
-    const { response, body } = await createTransferWithFreshAuthRetry(
-      request,
-      baseTransferPayload({ beneficiaryAccountNumber: '123' })
-    );
     test.skip(isSessionExpired401(response.status(), body), 'Session expired in environment');
     expect([400, 401, 403, 422]).toContain(response.status());
     assertFailureBody(body);

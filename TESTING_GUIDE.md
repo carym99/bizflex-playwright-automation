@@ -51,7 +51,7 @@ Regression-only tests should have **only** `@regression` so they are not picked 
 
 | Workflow | When | What runs |
 |----------|------|-----------|
-| `ci-smoke.yml` | Every **pull request** | `--grep "@smoke|@auth|@api-auth"` (fast gate; see `config/tags.ts` → `prSmokeGateGrep`) |
+| `ci-smoke.yml` | Every **pull request** | `test:account-selection:ci` then `--grep "@smoke|@auth|@api-auth" --grep-invert "@account-selection"` |
 | `ci-full.yml` | **Push to `main`** (+ manual) | Matrix lanes: each job `--grep "@${{ matrix.lane }}"` for `smoke`, `auth`, `api-auth`, `regression` |
 | `nightly-regression.yml` | **Schedule** (06:00 UTC) + manual | Full `playwright test` (all projects, no lane grep) |
 
@@ -90,7 +90,7 @@ npm run test:regression
 npm run test:pr-gate
 ```
 
-`test:pr-gate` matches the **pull request** workflow (`@smoke|@auth|@api-auth`); see `config/tags.ts` (`prSmokeGateGrep`).
+`test:pr-gate` matches the **pull request** workflow (`@smoke|@auth|@api-auth`, excluding `@account-selection`); account-selection runs via `test:account-selection:ci` in CI.
 
 Other useful scripts:
 
